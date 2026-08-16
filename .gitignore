@@ -1,0 +1,40 @@
+# Gradle and Kotlin build state
+.gradle/
+.kotlin/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local machine configuration
+local.properties
+*.jks
+*.keystore
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Android generated files
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Local emulator, diagnostics, screenshots, and inspection artifacts
+artifacts/
+*.hprof
+
+# Java and tool logs
+*.log
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
