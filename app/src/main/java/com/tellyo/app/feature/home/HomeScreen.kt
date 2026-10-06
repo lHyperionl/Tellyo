@@ -133,6 +133,9 @@ private fun HomeDashboardFrame(
     val firstNavigationFocus = remember { FocusRequester() }
     val heroFocus = remember { FocusRequester() }
     val destinationFocus = remember { FocusRequester() }
+    var initialChannelFocusPending by remember {
+        mutableStateOf(uiState.selectedDestination == NavigationDestination.HOME && !uiState.restoreChannelFocus)
+    }
 
     BackHandler(
         enabled = uiState.selectedDestination != NavigationDestination.HOME,
@@ -140,8 +143,10 @@ private fun HomeDashboardFrame(
         onAction(HomeAction.SelectDestination(NavigationDestination.HOME))
     }
 
-    LaunchedEffect(uiState.selectedDestination, uiState.channels.size) {
-        if (uiState.selectedDestination == NavigationDestination.HOME && !uiState.restoreChannelFocus) {
+    LaunchedEffect(uiState.selectedDestination) {
+        if (uiState.selectedDestination != NavigationDestination.HOME) {
+            initialChannelFocusPending = false
+        } else if (!uiState.restoreChannelFocus && (!initialChannelFocusPending || uiState.channels.isEmpty())) {
             firstNavigationFocus.requestFocus()
         }
     }
@@ -172,6 +177,8 @@ private fun HomeDashboardFrame(
             if (uiState.selectedDestination == NavigationDestination.HOME) {
                 DashboardContent(
                     uiState = uiState,
+                    focusFirstChannel = initialChannelFocusPending,
+                    onInitialChannelFocusHandled = { initialChannelFocusPending = false },
                     heroFocus = heroFocus,
                     navigationFocus = firstNavigationFocus,
                     onAction = onAction,
@@ -393,6 +400,8 @@ private fun NavigationSidebar(
 @Composable
 private fun DashboardContent(
     uiState: HomeUiState,
+    focusFirstChannel: Boolean,
+    onInitialChannelFocusHandled: () -> Unit,
     heroFocus: FocusRequester,
     navigationFocus: FocusRequester,
     onAction: (HomeAction) -> Unit,
@@ -417,6 +426,8 @@ private fun DashboardContent(
         SectionHeading(text = "Kanály")
         FavoriteChannels(
             uiState = uiState,
+            focusFirstChannel = focusFirstChannel,
+            onInitialChannelFocusHandled = onInitialChannelFocusHandled,
             firstFocus = favoriteFocus,
             heroFocus = heroFocus,
             epgFocus = epgFocus,
@@ -626,6 +637,8 @@ private fun ChannelArtworkFallback(presentation: ChannelPresentation) {
 @Composable
 private fun FavoriteChannels(
     uiState: HomeUiState,
+    focusFirstChannel: Boolean,
+    onInitialChannelFocusHandled: () -> Unit,
     firstFocus: FocusRequester,
     heroFocus: FocusRequester,
     epgFocus: FocusRequester,
@@ -644,15 +657,20 @@ private fun FavoriteChannels(
         mutableStateOf(uiState.selectedChannelId.takeIf { it in channelIds } ?: channelIds.firstOrNull())
     }
     val listState = rememberLazyListState()
-    LaunchedEffect(uiState.restoreChannelFocus, channelIds) {
-        if (uiState.restoreChannelFocus && channels.isNotEmpty()) {
-            val index = channelIds.indexOf(uiState.selectedChannelId).coerceAtLeast(0)
+    LaunchedEffect(focusFirstChannel, uiState.restoreChannelFocus, channelIds) {
+        if ((focusFirstChannel || uiState.restoreChannelFocus) && channels.isNotEmpty()) {
+            val index = if (uiState.restoreChannelFocus) {
+                channelIds.indexOf(uiState.selectedChannelId).coerceAtLeast(0)
+            } else {
+                0
+            }
             focusedCardId = channelIds[index]
             listState.scrollToItem(index)
             // Off-screen cards must be composed and attached before requesting focus.
             withFrameNanos { }
             cardFocusRequesters[index].requestFocus()
-            onAction(HomeAction.ChannelFocusRestored)
+            onInitialChannelFocusHandled()
+            if (uiState.restoreChannelFocus) onAction(HomeAction.ChannelFocusRestored)
         }
     }
 

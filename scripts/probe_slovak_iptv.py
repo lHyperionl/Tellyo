@@ -23,9 +23,15 @@ def playlist_entries(raw):
         if line.startswith("#EXTINF:"):
             attributes = dict(re.findall(r'([\w-]+)="([^"]*)"', line))
             headers = {}
+            for option, name in {"http-user-agent": "User-Agent", "http-referrer": "Referer",
+                                 "http-referer": "Referer", "http-origin": "Origin"}.items():
+                value = attributes.get(option)
+                if value and "\r" not in value and "\n" not in value:
+                    headers[name] = value
         elif line.startswith("#EXTVLCOPT:"):
             option, _, value = line.removeprefix("#EXTVLCOPT:").partition("=")
-            name = {"http-user-agent": "User-Agent", "http-referrer": "Referer"}.get(option)
+            name = {"http-user-agent": "User-Agent", "http-referrer": "Referer",
+                    "http-referer": "Referer", "http-origin": "Origin"}.get(option)
             if name:
                 headers[name] = value
         elif line and not line.startswith("#") and attributes is not None:

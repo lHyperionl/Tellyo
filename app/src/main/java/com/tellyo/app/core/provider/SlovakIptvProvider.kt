@@ -84,14 +84,14 @@ class SlovakIptvProvider @Inject constructor(
     override val id = PROVIDER_ID
 
     override suspend fun getChannels(): List<Channel> = playlistRepository.getEntries()
-        .filterNot { it.channel.id in EXISTING_STVR_IDS }
+        .filterNot { isExcludedChannel(it.channel.id) }
         .map { entry ->
             val channel = entry.channel
             channel.copy(number = CHANNEL_NUMBERS_AFTER_TA3[channel.id] ?: channel.number)
         }
 
     override suspend fun resolveStream(channel: Channel): StreamResolution {
-        if (channel.providerId != id || !channel.enabled || channel.id in EXISTING_STVR_IDS) {
+        if (channel.providerId != id || !channel.enabled || isExcludedChannel(channel.id)) {
             return StreamResolution.Unavailable("Kanál nie je dostupný v slovenskom IPTV zozname.")
         }
         val entry = playlistRepository.getEntries().firstOrNull { it.channel.id == channel.id }
@@ -121,5 +121,19 @@ class SlovakIptvProvider @Inject constructor(
         private val EXISTING_STVR_IDS = setOf(
             "iptv-Jednotka.sk", "iptv-Dvojka.sk", "iptv-24.sk", "iptv-Sport.sk",
         )
+        // User-removed channels stay excluded from bundled, cached and refreshed playlists.
+        private val REMOVED_CHANNEL_IDS = setOf(
+            "iptv-AntikInfoTV.sk", "iptv-JimJamEurope.uk", "iptv-LifeTv.sk", "iptv-ManaCirkevOnline.pt",
+            "iptv-TeleviziaMocenok.sk", "iptv-TurboTV.sk", "iptv-TV8.sk", "iptv-TV9.sk",
+            "iptv-TVBrezova.sk", "iptv-TVCentral.sk", "iptv-TVDK.sk", "iptv-TVLiptov.sk",
+            "iptv-TVLocAll.sk", "iptv-TVLux.sk", "iptv-TVMistral.sk", "iptv-TVMyjava.sk",
+            "iptv-TVNitricka.sk", "iptv-TVNRSR.sk", "iptv-TVPanorama.sk", "iptv-TVPovazie.sk",
+            "iptv-TVRaj.sk", "iptv-TVRomana.sk", "iptv-TVRuzinov.sk", "iptv-TVSen.sk",
+            "iptv-TVSeverka.sk", "iptv-TVSkalica.sk", "iptv-TVStaraTura.sk", "iptv-TVT.sk",
+            "iptv-TVVega.sk", "iptv-TVVita.sk", "iptv-VIOTV.sk", "iptv-ZapadoslovenskaTV.sk",
+        )
+
+        private fun isExcludedChannel(channelId: String): Boolean =
+            channelId.substringBefore('@').let { it in EXISTING_STVR_IDS || it in REMOVED_CHANNEL_IDS }
     }
 }

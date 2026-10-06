@@ -29,14 +29,14 @@ import org.junit.runner.RunWith
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 class SlovakIptvPlaybackTest {
     @Test
-    fun bundledProviderResolvesFiftyChannelsWithTheirHttpOptions() = runBlocking {
+    fun bundledProviderResolvesRetainedChannelsWithTheirHttpOptions() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val entries = context.assets.open(CachedSlovakPlaylistRepository.BUNDLED_FILE)
             .bufferedReader().use { M3uPlaylistParser.parse(it.readText()) }
         val provider = SlovakIptvProvider(object : SlovakPlaylistRepository {
             override suspend fun getEntries() = entries
         })
-        assertEquals(50, provider.getChannels().size)
+        assertEquals(18, provider.getChannels().size)
         provider.getChannels().forEach { channel ->
             val resolution = provider.resolveStream(channel)
             assertTrue(resolution is com.tellyo.app.core.model.StreamResolution.Playable)

@@ -10,6 +10,24 @@ import org.junit.Test
 
 class M3uPlaylistParserTest {
     @Test
+    fun readsInlineHttpOptionsAndLetsVlcOptionsOverrideWithoutLeaking() {
+        val entries = M3uPlaylistParser.parse("""
+            #EXTM3U
+            #EXTINF:-1 tvg-id="AXNWhite.us@SD" http-user-agent="Inline Agent" http-referrer="https://example.com/" http-origin="https://example.com",AXN White
+            #EXTVLCOPT:http-user-agent=Override Agent
+            https://example.com/white.m3u8
+            #EXTINF:-1 tvg-id="AXNWhite.us@CzechRepublic",AXN White CZ
+            https://example.com/white-cz.m3u8
+        """.trimIndent(), "czech-iptv")
+        assertEquals("Override Agent", entries[0].headers["User-Agent"])
+        assertEquals("https://example.com/", entries[0].headers["Referer"])
+        assertEquals("https://example.com", entries[0].headers["Origin"])
+        assertTrue(entries[1].headers.isEmpty())
+        assertEquals(2, entries.map { it.channel.id }.distinct().size)
+        assertTrue(entries.all { it.channel.providerId == "czech-iptv" })
+    }
+
+    @Test
     fun parsesHeadersWithoutLeakingThemAndKeepsStableIds() {
         val entries = M3uPlaylistParser.parse("""
             #EXTM3U

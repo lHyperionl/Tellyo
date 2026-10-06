@@ -24,7 +24,6 @@ class ReviewFocusRegressionTest {
             HomeScreen(HomeUiState(channels = channels, selectedChannelId = channels.first().id, isLoading = false), {})
         } }
         rule.waitForIdle()
-        rule.onRoot().performKeyInput { pressKey(Key.DirectionRight); pressKey(Key.DirectionDown) }
         repeat(29) { rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }; rule.waitForIdle() }
         rule.onNodeWithContentDescription("Channel 29, Programové údaje nie sú dostupné").assertIsFocused()
         rule.onRoot().performKeyInput { pressKey(Key.DirectionUp); pressKey(Key.DirectionDown) }
@@ -78,8 +77,7 @@ class ReviewFocusRegressionTest {
                 programsByChannel = mapOf(channel.id to listOf(old, visible)), isLoading = false), {})
         } }
         rule.waitForIdle()
-        rule.onNodeWithContentDescription("Domov").performKeyInput {
-            pressKey(Key.DirectionRight); pressKey(Key.DirectionDown)
+        rule.onNode(isFocused()).performKeyInput {
             pressKey(Key.DirectionDown)
         }
         rule.onNodeWithContentDescription("Channel 0: Visible").assertIsFocused()
@@ -91,8 +89,7 @@ class ReviewFocusRegressionTest {
             HomeScreen(HomeUiState(channels = listOf(channel), selectedChannelId = channel.id, isLoading = false), {})
         } }
         rule.waitForIdle()
-        rule.onNodeWithContentDescription("Domov").performKeyInput {
-            pressKey(Key.DirectionRight); pressKey(Key.DirectionDown)
+        rule.onNode(isFocused()).performKeyInput {
             pressKey(Key.DirectionDown)
         }
         rule.onNode(isFocused()).assert(hasContentDescription("Celý program"))

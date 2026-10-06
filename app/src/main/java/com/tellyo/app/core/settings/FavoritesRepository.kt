@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.tellyo.app.core.model.ChannelLineup
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.IOException
 import javax.inject.Inject
@@ -52,10 +53,24 @@ class DataStoreFavoritesRepository @Inject constructor(
     override suspend fun initialize(channelIds: List<String>) {
         if (channelIds.isEmpty()) return
         context.tellyoFavoritesDataStore.edit { preferences ->
-            if (preferences[Keys.configured] == true) return@edit
-            preferences[Keys.configured] = true
-            preferences[Keys.channelIds] = channelIds.toSet()
-            preferences[Keys.order] = encodeOrder(channelIds)
+            if (preferences[Keys.configured] != true) {
+                preferences[Keys.configured] = true
+                preferences[Keys.channelIds] = channelIds.toSet()
+                preferences[Keys.order] = encodeOrder(channelIds)
+            }
+            if (preferences[Keys.childrenAfterSport2] != true &&
+                ChannelLineup.CHILDREN_ANCHOR_ID in channelIds &&
+                channelIds.containsAll(ChannelLineup.CHILDREN_IDS)
+            ) {
+                val updated = FavoriteSettings(
+                    configured = true,
+                    channelIds = preferences[Keys.channelIds].orEmpty(),
+                    orderedChannelIds = decodeOrder(preferences[Keys.order]),
+                ).withChildrenAfterSport2(channelIds)
+                preferences[Keys.channelIds] = updated.channelIds
+                preferences[Keys.order] = encodeOrder(updated.orderedChannelIds)
+                preferences[Keys.childrenAfterSport2] = true
+            }
         }
     }
 
@@ -94,6 +109,7 @@ class DataStoreFavoritesRepository @Inject constructor(
         val configured = booleanPreferencesKey("configured")
         val channelIds = stringSetPreferencesKey("channel_ids")
         val order = stringPreferencesKey("channel_order")
+        val childrenAfterSport2 = booleanPreferencesKey("children_after_sport2_applied")
     }
 
     private companion object {
@@ -106,4 +122,17 @@ class DataStoreFavoritesRepository @Inject constructor(
             ?.filter(String::isNotBlank)
             .orEmpty()
     }
+}
+
+/** Match Sport2's favorite group so the requested block stays together on existing installs. */
+internal fun FavoriteSettings.withChildrenAfterSport2(availableIds: List<String>): FavoriteSettings {
+    val children = ChannelLineup.CHILDREN_IDS.filter { it in availableIds }
+    val favorites = channelIds - children.toSet()
+    if (ChannelLineup.CHILDREN_ANCHOR_ID !in favorites) {
+        return copy(channelIds = favorites, orderedChannelIds = orderedChannelIds.filterNot { it in children })
+    }
+    val order = (orderedChannelIds + availableIds).distinct()
+        .filter { it in favorites && it in availableIds }.toMutableList()
+    order.addAll(order.indexOf(ChannelLineup.CHILDREN_ANCHOR_ID) + 1, children)
+    return copy(channelIds = favorites + children, orderedChannelIds = order)
 }

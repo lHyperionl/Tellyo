@@ -4,7 +4,7 @@ Android TV / Google TV app for live television and programme guides, designed fo
 
 ## Features
 
-- Native Media3 playback for STVR, Slovak IPTV and configured authorized HLS/DASH streams.
+- Native Media3 playback for STVR, Slovak and selected Czech IPTV feeds, and configured authorized HLS/DASH streams.
 - Official Markíza, JOJ and TA3 web players with broadcaster-managed advertising and account access.
 - Cached programme guides for 20 channels, with priority-aware imports and optional XMLTV overrides.
 - Persistent favorites, channel ordering, last-channel autoplay and playback quality settings.
@@ -34,4 +34,5 @@ The bundled channel catalogue and cached data provide local fallbacks. An author
 
 - [UI design](docs/ui-design.md) and [TV navigation fixes](docs/tv-ux-fixes-2026-10-04.md)
 - [IPTV validation](docs/iptv-validation.md) and [programme guide coverage](docs/programme-guide-validation-2026-10-06.md)
+- [Czech IPTV selection and validation](docs/czech-iptv-validation.md)
 - [Latest code review, fixes and test results](docs/app-code-review-fixes-2026-10-06.md)

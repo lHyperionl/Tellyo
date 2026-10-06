@@ -26,6 +26,7 @@ import com.tellyo.app.core.provider.StvrTvProvider
 import com.tellyo.app.core.model.Channel
 import com.tellyo.app.core.model.ChannelCategory
 import com.tellyo.app.core.model.Program
+import com.tellyo.app.core.settings.FavoriteSettings
 import com.tellyo.app.core.ui.theme.LocalTellyoReduceMotion
 import com.tellyo.app.core.ui.theme.TellyoTheme
 import java.time.Instant
@@ -87,7 +88,8 @@ class HomeScreenFocusTest {
             }
         }
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Domov").performKeyInput {
+        composeRule.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionLeft) }
+        composeRule.onNodeWithContentDescription("Domov").assertIsFocused().performKeyInput {
             pressKey(Key.DirectionRight)
             pressKey(Key.DirectionDown)
         }
@@ -158,7 +160,8 @@ class HomeScreenFocusTest {
         )
         synopsis.assertIsDisplayed()
         assertTrue("Synopsis must fit inside the hero", synopsis.fetchSemanticsNode().boundsInRoot.bottom <= heroBounds.bottom)
-        composeRule.onNodeWithContentDescription("Domov").performKeyInput {
+        composeRule.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionLeft) }
+        composeRule.onNodeWithContentDescription("Domov").assertIsFocused().performKeyInput {
             pressKey(Key.DirectionRight)
         }
         composeRule.onNodeWithContentDescription("Náhľad Jednotka")
@@ -188,7 +191,8 @@ class HomeScreenFocusTest {
             }
         }
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Domov").performKeyInput {
+        composeRule.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionLeft) }
+        composeRule.onNodeWithContentDescription("Domov").assertIsFocused().performKeyInput {
             pressKey(Key.DirectionRight)
             pressKey(Key.DirectionDown)
         }
@@ -202,7 +206,7 @@ class HomeScreenFocusTest {
     }
 
     @Test
-    fun initialFocusStartsOnHomeAndDownMovesToGuide() {
+    fun initialFocusStartsOnFirstChannelAndSidebarRemainsReachable() {
         composeRule.setContent {
             TellyoTheme {
                 HomeScreen(
@@ -213,11 +217,53 @@ class HomeScreenFocusTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Domov").assertIsFocused()
-        composeRule.onNodeWithContentDescription("Domov").performKeyInput {
+        composeRule.onNodeWithContentDescription("Jednotka, Programové údaje nie sú dostupné").assertIsFocused()
+        composeRule.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionLeft) }
+        composeRule.onNodeWithContentDescription("Domov").assertIsFocused().performKeyInput {
             pressKey(Key.DirectionDown)
         }
         composeRule.onNodeWithContentDescription("TV program").assertIsFocused()
+    }
+
+    @Test
+    fun coldStartWaitsForChannelsAndFocusesFirstInSavedOrderOnlyOnce() {
+        val loaded = loadedHomeState()
+        var state by mutableStateOf(HomeUiState())
+        composeRule.setContent {
+            TellyoTheme {
+                HomeScreen(state, onAction = { action ->
+                    if (action is HomeAction.FocusFavorite) {
+                        state = state.copy(selectedChannelId = action.channelId, focusedFavoriteId = action.channelId)
+                    }
+                })
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Domov").assertIsFocused()
+        composeRule.runOnIdle {
+            state = loaded.copy(
+                isLoading = false,
+                selectedChannelId = StvrTvProvider.SPORT_ID,
+                favoriteSettings = FavoriteSettings(
+                    configured = true,
+                    channelIds = loaded.channels.map { it.id }.toSet(),
+                    orderedChannelIds = listOf(StvrTvProvider.DVOJKA_ID, StvrTvProvider.JEDNOTKA_ID),
+                ),
+            )
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Dvojka, Programové údaje nie sú dostupné")
+            .assertIsFocused().assertIsSelected().performKeyInput { pressKey(Key.DirectionRight) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Jednotka, Programové údaje nie sú dostupné").assertIsFocused()
+        composeRule.runOnIdle {
+            state = state.copy(
+                now = state.now.plusSeconds(60),
+                channels = state.channels + loaded.channels.first().copy(id = "new-channel", name = "New channel"),
+            )
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Jednotka, Programové údaje nie sú dostupné").assertIsFocused()
     }
 
     @Test
@@ -232,7 +278,8 @@ class HomeScreenFocusTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Domov").performKeyInput {
+        composeRule.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionLeft) }
+        composeRule.onNodeWithContentDescription("Domov").assertIsFocused().performKeyInput {
             pressKey(Key.DirectionDown)
             pressKey(Key.DirectionDown)
         }
@@ -255,7 +302,8 @@ class HomeScreenFocusTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Domov").performKeyInput {
+        composeRule.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionLeft) }
+        composeRule.onNodeWithContentDescription("Domov").assertIsFocused().performKeyInput {
             pressKey(Key.DirectionRight)
         }
         composeRule.onNodeWithContentDescription("Náhľad Jednotka").assertIsFocused()
@@ -273,7 +321,8 @@ class HomeScreenFocusTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Domov").performKeyInput {
+        composeRule.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionLeft) }
+        composeRule.onNodeWithContentDescription("Domov").assertIsFocused().performKeyInput {
             pressKey(Key.DirectionRight)
             pressKey(Key.DirectionDown)
             pressKey(Key.DirectionRight)
@@ -300,7 +349,8 @@ class HomeScreenFocusTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Domov").performKeyInput {
+        composeRule.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionLeft) }
+        composeRule.onNodeWithContentDescription("Domov").assertIsFocused().performKeyInput {
             pressKey(Key.DirectionRight)
         }
         composeRule.waitForIdle()
@@ -333,7 +383,8 @@ class HomeScreenFocusTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Domov").performKeyInput {
+        composeRule.onNode(isFocused()).performKeyInput { pressKey(Key.DirectionLeft) }
+        composeRule.onNodeWithContentDescription("Domov").assertIsFocused().performKeyInput {
             pressKey(Key.DirectionRight)
             pressKey(Key.DirectionDown)
         }

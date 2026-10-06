@@ -16,7 +16,7 @@ data class M3uChannel(
 object M3uPlaylistParser {
     private val attribute = Regex("([\\w-]+)=\"([^\"]*)\"")
 
-    fun parse(raw: String): List<M3uChannel> {
+    fun parse(raw: String, providerId: String = SlovakIptvProvider.PROVIDER_ID): List<M3uChannel> {
         require(raw.trimStart('\uFEFF', ' ', '\r', '\n', '\t').startsWith("#EXTM3U")) {
             "Response is not an extended M3U playlist"
         }
@@ -37,15 +37,16 @@ object M3uPlaylistParser {
                     }
                     displayName = if (separator >= 0) line.substring(separator + 1).trim() else ""
                     headers.clear()
+                    metadata?.forEach { (option, value) ->
+                        val key = httpHeaderName(option)
+                        if (key != null && value.isNotBlank() && '\r' !in value && '\n' !in value) {
+                            headers[key] = value
+                        }
+                    }
                 }
                 line.startsWith("#EXTVLCOPT:") -> {
                     val option = line.removePrefix("#EXTVLCOPT:")
-                    val key = when (option.substringBefore('=').lowercase()) {
-                        "http-user-agent" -> "User-Agent"
-                        "http-referrer", "http-referer" -> "Referer"
-                        "http-origin" -> "Origin"
-                        else -> null
-                    }
+                    val key = httpHeaderName(option.substringBefore('='))
                     val value = option.substringAfter('=', "")
                     if (key != null && value.isNotBlank() && '\r' !in value && '\n' !in value) {
                         headers[key] = value
@@ -84,7 +85,7 @@ object M3uPlaylistParser {
                                     logoUrl = attributes["tvg-logo"]?.takeIf {
                                         runCatching { URI(it) }.getOrNull()?.scheme == "https"
                                     },
-                                    providerId = SlovakIptvProvider.PROVIDER_ID,
+                                    providerId = providerId,
                                     category = category,
                                     enabled = true,
                                 ),
@@ -100,5 +101,12 @@ object M3uPlaylistParser {
         }
         require(entries.isNotEmpty()) { "Playlist contains no supported HLS/DASH channels" }
         return entries.values.toList()
+    }
+
+    private fun httpHeaderName(option: String): String? = when (option.lowercase()) {
+        "http-user-agent" -> "User-Agent"
+        "http-referrer", "http-referer" -> "Referer"
+        "http-origin" -> "Origin"
+        else -> null
     }
 }
