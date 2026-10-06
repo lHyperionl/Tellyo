@@ -7,6 +7,23 @@ plugins {
     id("com.google.dagger.hilt.android")
 }
 
+fun String.asBuildConfigString(): String = "\"" +
+    replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+val tellyoConfigBaseUrl = providers.gradleProperty("tellyoConfigBaseUrl")
+    .orElse(providers.environmentVariable("TELLYO_CONFIG_BASE_URL"))
+    .getOrElse("")
+val releaseKeystorePath = providers.environmentVariable("TELLYO_KEYSTORE_PATH").orNull
+val releaseKeystorePassword = providers.environmentVariable("TELLYO_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("TELLYO_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("TELLYO_KEY_PASSWORD").orNull
+val hasReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.tellyo.app"
     compileSdk = 35
@@ -18,14 +35,34 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
+        buildConfigField("String", "TELLYO_CONFIG_BASE_URL", tellyoConfigBaseUrl.asBuildConfigString())
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                storeFile = file(requireNotNull(releaseKeystorePath))
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -66,6 +103,7 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:$lifecycleVersion")
@@ -78,6 +116,7 @@ dependencies {
     implementation("androidx.compose.foundation:foundation:$composeVersion")
     implementation("androidx.compose.animation:animation:$composeVersion")
     implementation("androidx.compose.material3:material3:1.3.1")
+    implementation("androidx.compose.material:material-icons-extended:$composeVersion")
     debugImplementation("androidx.compose.ui:ui-tooling:$composeVersion")
 
     // Compose for TV foundation is included for TV-aware evolution; the shell
@@ -108,6 +147,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.9.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.coil-kt:coil-svg:2.7.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")

@@ -12,4 +12,8 @@ abstract class PlaybackModule {
     @Binds
     @Singleton
     abstract fun bindPlaybackService(client: Media3PlaybackClient): PlaybackService
+
+    @Binds
+    @Singleton
+    abstract fun bindPlaybackLogger(logger: AndroidPlaybackLogger): PlaybackLogger
 }

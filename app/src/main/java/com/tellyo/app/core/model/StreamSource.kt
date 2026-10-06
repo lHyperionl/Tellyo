@@ -10,6 +10,8 @@ data class StreamSource(
     val headers: Map<String, String> = emptyMap(),
     val expiresAt: Instant? = null,
     val isTimeshiftable: Boolean = false,
+    /** Optional safety distance from the live edge for feeds with uneven segment delivery. */
+    val targetLiveOffsetMs: Long? = null,
 )
 
 enum class StreamType {

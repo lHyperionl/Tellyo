@@ -4,11 +4,15 @@ import android.net.Uri
 import com.tellyo.app.core.model.Channel
 import com.tellyo.app.core.model.StreamSource
 import com.tellyo.app.core.model.StreamType
+import com.tellyo.app.core.network.readLimitedBytes
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -77,7 +81,7 @@ class HttpStvrOfficialApi @Inject constructor(
                 if (!response.isSuccessful) {
                     error("STVR live endpoint returned HTTP ${response.code}")
                 }
-                val body = response.body?.string().orEmpty()
+                val body = response.body?.readLimitedBytes(MAX_LIVE_BYTES)?.toString(Charsets.UTF_8).orEmpty()
                 val clip = json.decodeFromString<StvrLiveResponse>(body).clip
                     ?: error("STVR live endpoint returned no programme")
                 StvrLiveData(
@@ -98,6 +102,7 @@ class HttpStvrOfficialApi @Inject constructor(
         return withContext(Dispatchers.IO) {
             val parser = StvrScheduleParser()
             val pages = (0 until days).mapNotNull { offset ->
+                currentCoroutineContext().ensureActive()
                 val date = from.plusDays(offset.toLong())
                 val request = Request.Builder()
                     .url("$PROGRAM_ENDPOINT?date=$date")
@@ -105,14 +110,18 @@ class HttpStvrOfficialApi @Inject constructor(
                     .header("User-Agent", "Tellyo/0.1 Android TV")
                     .build()
 
-                runCatching {
+                try {
                     httpClient.newCall(request).execute().use { response ->
                         if (!response.isSuccessful) {
                             error("STVR programme endpoint returned HTTP ${response.code}")
                         }
-                        parser.parse(response.body?.string().orEmpty(), date)
+                        parser.parse(response.body?.readLimitedBytes(MAX_SCHEDULE_BYTES)?.toString(Charsets.UTF_8).orEmpty(), date)
                     }
-                }.getOrNull()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                }
             }
             pages.flatten()
                 .sortedWith(compareBy<StvrScheduleProgramme> { it.channelId }.thenBy { it.start })
@@ -148,6 +157,8 @@ class HttpStvrOfficialApi @Inject constructor(
     }
 
     companion object {
+        private const val MAX_LIVE_BYTES = 2L * 1024 * 1024
+        private const val MAX_SCHEDULE_BYTES = 8L * 1024 * 1024
         const val LIVE_ENDPOINT = "https://www.stvr.sk/json/live5f.json"
         const val PROGRAM_ENDPOINT = "https://www.stvr.sk/program"
         private val SOURCE_ZONE: ZoneId = ZoneId.of("Europe/Bratislava")

@@ -3,6 +3,8 @@ package com.tellyo.app.core.epg
 import com.tellyo.app.core.provider.StvrOfficialApi
 import com.tellyo.app.core.provider.StvrScheduleProgramme
 import com.tellyo.app.core.provider.StvrTvProvider
+import com.tellyo.app.core.provider.ChannelCatalogRepository
+import com.tellyo.app.core.model.Channel
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -12,24 +14,53 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Remote STVR EPG source combining the published schedule with live metadata. */
 @Singleton
 class StvrEpgProvider @Inject constructor(
     private val officialApi: StvrOfficialApi,
+    private val channelCatalog: ChannelCatalogRepository,
 ) : EpgProvider {
     override val id: String = PROVIDER_ID
+    override val minimumRefreshInterval: Duration = Duration.ofMinutes(5)
+    private val fetchMutex = Mutex()
+    private var scheduleDate: LocalDate? = null
+    private var scheduleFetchedAt: Instant? = null
+    private var cachedSchedule: List<RemoteProgramme> = emptyList()
 
-    override suspend fun fetchXml(): String {
-        val scheduledRecords = runCatching {
-            officialApi.fetchSchedule(
-                from = LocalDate.now(SOURCE_ZONE),
-                days = 2,
-            ).toRemoteProgrammes()
-        }.getOrElse { emptyList() }
+    override suspend fun fetchXml(): String = fetch().xml
 
+    override suspend fun fetch(): EpgFetchResult = fetchMutex.withLock {
+        val today = LocalDate.now(SOURCE_ZONE)
+        val now = Instant.now()
+        val scheduleIsFresh = scheduleDate == today &&
+            scheduleFetchedAt?.let { Duration.between(it, now) < Duration.ofHours(6) } == true
+        if (!scheduleIsFresh) {
+            try {
+                val updated = officialApi.fetchSchedule(today, days = 2).toRemoteProgrammes()
+                if (updated.isNotEmpty()) {
+                    cachedSchedule = updated
+                    scheduleDate = today
+                    scheduleFetchedAt = now
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Keep the schedule while live metadata is still available.
+            }
+        }
+        val scheduledRecords = cachedSchedule
+
+        val stvrChannels = channelCatalog.getChannels()
+            .filter { it.providerId == StvrTvProvider.PROVIDER_ID }
+            .filter(Channel::enabled)
         val liveRecords = buildList {
-            for (channel in StvrTvProvider.channels) {
+            for (channel in stvrChannels) {
+                currentCoroutineContext().ensureActive()
                 try {
                     val live = officialApi.fetchLive(channel)
                     val start = live.start
@@ -58,10 +89,10 @@ class StvrEpgProvider @Inject constructor(
         val records = mergeLiveMetadata(scheduledRecords, liveRecords)
         require(records.isNotEmpty()) { "STVR returned no current programme data" }
 
-        return buildString {
+        val xml = buildString {
             append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
             append("<tv generator-info-name=\"Tellyo official STVR programme sources\">")
-            StvrTvProvider.channels.forEach { channel ->
+            stvrChannels.forEach { channel ->
                 append("<channel id=\"")
                 append(xmlEscape(channel.id))
                 append("\"><display-name>")
@@ -97,6 +128,12 @@ class StvrEpgProvider @Inject constructor(
             }
             append("</tv>")
         }
+        EpgFetchResult(
+            xml = xml,
+            replacementWindows = scheduledRecords.groupBy { it.channelId }.map { (id, programs) ->
+                EpgReplacementWindow(id, programs.minOf { it.start }, programs.maxOf { it.end })
+            },
+        )
     }
 
     private fun List<StvrScheduleProgramme>.toRemoteProgrammes(): List<RemoteProgramme> =

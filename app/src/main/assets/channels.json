@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "channels": [
+    {
+      "id": "stvr-jednotka",
+      "number": 1,
+      "name": "Jednotka",
+      "shortName": "Jednotka",
+      "provider": "stvr",
+      "category": "GENERAL",
+      "enabled": true
+    },
+    {
+      "id": "stvr-dvojka",
+      "number": 2,
+      "name": "Dvojka",
+      "shortName": "Dvojka",
+      "provider": "stvr",
+      "category": "CULTURE",
+      "enabled": true
+    },
+    {
+      "id": "stvr-24",
+      "number": 3,
+      "name": ":24",
+      "shortName": ":24",
+      "provider": "stvr",
+      "category": "NEWS",
+      "enabled": true
+    },
+    {
+      "id": "stvr-sport",
+      "number": 4,
+      "name": "Šport",
+      "shortName": "Šport",
+      "provider": "stvr",
+      "category": "SPORTS",
+      "enabled": true
+    },
+    {
+      "id": "joj",
+      "number": 5,
+      "name": "JOJ",
+      "shortName": "JOJ",
+      "provider": "joj",
+      "category": "GENERAL",
+      "enabled": true
+    },
+    {
+      "id": "joj-plus",
+      "number": 6,
+      "name": "JOJ Plus",
+      "shortName": "JOJ Plus",
+      "provider": "joj",
+      "category": "GENERAL",
+      "enabled": true
+    },
+    {
+      "id": "joj-krimi",
+      "number": 7,
+      "name": "JOJ Krimi (WAU)",
+      "shortName": "JOJ Krimi",
+      "provider": "joj",
+      "category": "GENERAL",
+      "enabled": true
+    },
+    {
+      "id": "joj-24",
+      "number": 8,
+      "name": "JOJ 24",
+      "shortName": "JOJ 24",
+      "provider": "joj",
+      "category": "NEWS",
+      "enabled": true
+    },
+    {
+      "id": "markiza",
+      "number": 13,
+      "name": "Markíza",
+      "shortName": "Markíza",
+      "provider": "markiza",
+      "category": "GENERAL",
+      "enabled": true
+    },
+    {
+      "id": "markiza-doma",
+      "number": 14,
+      "name": "Doma",
+      "shortName": "Doma",
+      "provider": "markiza",
+      "category": "GENERAL",
+      "enabled": true
+    },
+    {
+      "id": "markiza-dajto",
+      "number": 15,
+      "name": "Dajto",
+      "shortName": "Dajto",
+      "provider": "markiza",
+      "category": "GENERAL",
+      "enabled": true
+    },
+    {
+      "id": "markiza-krimi",
+      "number": 16,
+      "name": "Markíza Krimi",
+      "shortName": "Krimi",
+      "provider": "markiza",
+      "category": "GENERAL",
+      "enabled": true
+    },
+    {
+      "id": "markiza-klasik",
+      "number": 17,
+      "name": "Markíza Klasik",
+      "shortName": "Klasik",
+      "provider": "markiza",
+      "category": "GENERAL",
+      "enabled": true
+    },
+    {
+      "id": "ta3",
+      "number": 18,
+      "name": "TA3",
+      "shortName": "TA3",
+      "provider": "ta3",
+      "category": "NEWS",
+      "enabled": true
+    }
+  ]
+}

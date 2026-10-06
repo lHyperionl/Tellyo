@@ -9,7 +9,10 @@ import org.junit.Test
 class StvrTvProviderTest {
     @Test
     fun providerExposesOfficialStvrChannels() = runTest {
-        val channels = StvrTvProvider(FakeStvrOfficialApi()).getChannels()
+        val channels = StvrTvProvider(
+            FakeStvrOfficialApi(),
+            InMemoryChannelCatalogRepository(ChannelCatalogFixtures.stvr()),
+        ).getChannels()
 
         assertEquals(StvrTvProvider.PROVIDER_ID, channels.first().providerId)
         assertEquals(4, channels.size)
@@ -18,9 +21,14 @@ class StvrTvProviderTest {
 
     @Test
     fun providerRejectsChannelsOwnedByAnotherProvider() = runTest {
-        val channel = StvrTvProvider.channels.first().copy(providerId = "other")
+        val channel = ChannelCatalogFixtures.stvr().first().copy(providerId = "other")
 
-        assertTrue(StvrTvProvider(FakeStvrOfficialApi()).resolveStream(channel) is StreamResolution.Unavailable)
+        assertTrue(
+            StvrTvProvider(
+                FakeStvrOfficialApi(),
+                InMemoryChannelCatalogRepository(ChannelCatalogFixtures.stvr()),
+            ).resolveStream(channel) is StreamResolution.Unavailable,
+        )
     }
 
     private class FakeStvrOfficialApi : StvrOfficialApi {

@@ -21,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,7 +52,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(top = 18.dp, start = 8.dp, end = 10.dp, bottom = 18.dp),
+            .padding(top = 8.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Text(
@@ -117,7 +116,7 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.weight(1f))
         Text(
-            text = "Tellyo 0.1.0  •  TV foundation",
+            text = "Tellyo 0.1.0",
             color = TellyoColors.TextMuted,
             fontSize = 14.sp,
         )
@@ -227,12 +226,11 @@ private fun SettingsInfoRow(
         modifier = Modifier
             .fillMaxWidth()
             .height(58.dp)
-            .background(TellyoColors.SurfacePrimary, RoundedCornerShape(10.dp))
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        TellyoIcon(icon = icon, tint = TellyoColors.PrimaryBlueBright, modifier = Modifier.width(28.dp))
+        TellyoIcon(icon = icon, tint = TellyoColors.TextSecondary, modifier = Modifier.width(28.dp))
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(text = title, color = TellyoColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
             Text(text = description, color = TellyoColors.TextSecondary, fontSize = 14.sp)
@@ -254,7 +252,7 @@ private fun SettingIndicator(enabled: Boolean) {
     ) {
         Text(
             text = if (enabled) "ZAP" else "VYP",
-            color = Color.White,
+            color = if (enabled) TellyoColors.BackgroundPrimary else TellyoColors.TextPrimary,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
         )

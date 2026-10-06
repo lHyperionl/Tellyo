@@ -1,29 +1,37 @@
 # Tellyo Android TV
 
-Initial Android TV / Google TV foundation for the Tellyo shell.
+Android TV / Google TV app for live television and programme guides, designed for D-pad remotes.
 
-The current build contains the approved dark navy / electric blue Phase 4 dashboard, D-pad focus behavior, a Media3 playback proof of concept, and provider/channel boundaries for future integrations. The dashboard follows the supplied 1672×941 reference composition and scales that design canvas to a 16:9 TV window. The player uses one public development HLS test asset configured in `PreviewTvProvider`; it is not a broadcaster integration. The project contains no authentication, DRM, scraping, timeshift, backend, or ad-detection code.
+## Features
 
-## Build
+- Native Media3 playback for STVR, Slovak IPTV and configured authorized HLS/DASH streams.
+- Official Markíza, JOJ and TA3 web players with broadcaster-managed advertising and account access.
+- Cached programme guides for 20 channels, with priority-aware imports and optional XMLTV overrides.
+- Persistent favorites, channel ordering, last-channel autoplay and playback quality settings.
+- Connection status, foreground-aware recovery that respects manual pause, and playback diagnostics.
 
-```powershell
-$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.2.13-hotspot"
-$env:ANDROID_HOME = "<Android SDK path>"
-.\gradlew.bat :app:assembleDebug
-```
+External streams depend on provider availability, network and region. JOJ and Plus require an account in their official players.
 
-Useful checks:
+## Build and run
 
-```powershell
-.\gradlew.bat :app:testDebugUnitTest
-.\gradlew.bat :app:lintDebug
-```
+Requires JDK 17 or newer, Android SDK 35, and an Android TV device or emulator running Android 6.0 or newer. Set `JAVA_HOME` and `ANDROID_HOME` to your local installations; add Android SDK platform-tools to `PATH`.
 
-Install the debug APK on a running Android TV emulator or connected TV device:
+On Windows, build, test and lint, then install on a connected TV:
 
 ```powershell
+.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 adb install -r .\app\build\outputs\apk\debug\app-debug.apk
 adb shell monkey -p com.tellyo.app 1
 ```
 
-The primary application package is `com.tellyo.app`.
+On Linux/macOS, use `bash ./gradlew` for Gradle commands. TV instrumentation tests use `:app:connectedDebugAndroidTest` and require a running emulator or device. Live-provider tests are opt-in.
+
+For the local Windows TV emulator, run `scripts/start-tv-emulator.ps1` and keep its terminal open. See the [emulator setup notes](docs/emulator-startup-validation.md).
+
+## Configuration and documentation
+
+The bundled channel catalogue and cached data provide local fallbacks. An authorized HTTPS metadata endpoint can supply channels, provider routes and XMLTV; see the [configuration contract](docs/authorized-metadata.md). Configure keystore secrets to use the **Signed Android release** GitHub Actions workflow.
+
+- [UI design](docs/ui-design.md) and [TV navigation fixes](docs/tv-ux-fixes-2026-10-04.md)
+- [IPTV validation](docs/iptv-validation.md) and [programme guide coverage](docs/programme-guide-validation-2026-10-06.md)
+- [Latest code review, fixes and test results](docs/app-code-review-fixes-2026-10-06.md)

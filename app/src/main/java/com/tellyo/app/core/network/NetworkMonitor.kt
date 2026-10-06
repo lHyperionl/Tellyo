@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,18 +28,29 @@ class AndroidNetworkMonitor(
     private val connectivityManager = context.getSystemService(ConnectivityManager::class.java)
     private val _status = MutableStateFlow(currentStatus())
     override val status: StateFlow<NetworkStatus> = _status.asStateFlow()
+    private var defaultNetwork: Network? = connectivityManager.activeNetwork
 
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            _status.value = NetworkStatus.Available
+            // Availability alone does not mean that this network has Internet.
+            // Wait for the default network's validated capabilities.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) defaultNetwork = network
         }
 
         override fun onLost(network: Network) {
-            _status.value = currentStatus()
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+                _status.value = currentStatus()
+            } else if (network == defaultNetwork) {
+                defaultNetwork = null
+                _status.value = NetworkStatus.Unavailable
+            }
         }
 
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-            if (network == connectivityManager.activeNetwork) {
+            val active = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                defaultNetwork
+            } else connectivityManager.activeNetwork
+            if (network == active) {
                 _status.value = statusFor(capabilities)
             }
         }
@@ -46,12 +58,14 @@ class AndroidNetworkMonitor(
 
     init {
         runCatching {
-            connectivityManager.registerNetworkCallback(
-                NetworkRequest.Builder()
-                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                    .build(),
-                callback,
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                connectivityManager.registerDefaultNetworkCallback(callback)
+            } else {
+                connectivityManager.registerNetworkCallback(
+                    NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(),
+                    callback,
+                )
+            }
         }.onFailure {
             _status.value = currentStatus()
         }

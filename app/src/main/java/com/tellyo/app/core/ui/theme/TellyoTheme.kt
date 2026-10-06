@@ -12,22 +12,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 object TellyoColors {
-    val BackgroundPrimary = Color(0xFF050B18)
-    val BackgroundSecondary = Color(0xFF081426)
-    val SurfacePrimary = Color(0xFF0B1A2D)
-    val SurfaceSecondary = Color(0xFF10233A)
-    val SurfaceElevated = Color(0xFF132A45)
-    val PrimaryBlue = Color(0xFF168BFF)
-    val PrimaryBlueBright = Color(0xFF25A7FF)
-    val PrimaryBlueDark = Color(0xFF0866E8)
-    val FocusGlow = Color(0x66168BFF)
-    val TextPrimary = Color(0xFFF7F9FC)
-    val TextSecondary = Color(0xFFB7C0CE)
-    val TextMuted = Color(0xFF7D8999)
-    val Live = Color(0xFFF04444)
+    val BackgroundPrimary = Color(0xFF0B1018)
+    val BackgroundSecondary = Color(0xFF101722)
+    val SurfacePrimary = Color(0xFF151E2B)
+    val SurfaceSecondary = Color(0xFF1C2A3C)
+    val SurfaceElevated = Color(0xFF24364D)
+    val PrimaryBlue = Color(0xFF4C9BE8)
+    val PrimaryBlueBright = Color(0xFF82BFFF)
+    val PrimaryBlueDark = Color(0xFF244565)
+    val BrandBlue = Color(0xFF25A7FF)
+    val FocusRing = Color(0xFFB8DAFF)
+    val TextPrimary = Color(0xFFF1F4F8)
+    val TextSecondary = Color(0xFFB8C2D0)
+    val TextMuted = Color(0xFF95A3B5)
+    val Live = Color(0xFFB92E3C)
     val Success = Color(0xFF45C96B)
     val Warning = Color(0xFFF5B942)
-    val Divider = Color(0xFF20334A)
+    val Divider = Color(0xFF293545)
 }
 
 object TellyoSpacing {
@@ -97,7 +98,7 @@ private val TellyoTypography = Typography(
 
 private val TellyoColorScheme = darkColorScheme(
     primary = TellyoColors.PrimaryBlue,
-    onPrimary = TellyoColors.TextPrimary,
+    onPrimary = TellyoColors.BackgroundPrimary,
     primaryContainer = TellyoColors.PrimaryBlueDark,
     onPrimaryContainer = TellyoColors.TextPrimary,
     secondary = TellyoColors.PrimaryBlueBright,

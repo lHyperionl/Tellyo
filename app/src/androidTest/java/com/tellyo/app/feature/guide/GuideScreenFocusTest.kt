@@ -6,12 +6,18 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.input.key.Key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import com.tellyo.app.core.model.Channel
 import com.tellyo.app.core.model.ChannelCategory
 import com.tellyo.app.core.model.Program
 import com.tellyo.app.core.ui.theme.TellyoTheme
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -20,6 +26,49 @@ import org.junit.Test
 class GuideScreenFocusTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test fun hourLabelIsAlignedWithProgrammeStartingAtThatHour() {
+        val channel = Channel("timeline", 1, "Timeline", "T", null, "test", ChannelCategory.GENERAL, true)
+        val start = Instant.parse("2026-10-06T12:00:00Z")
+        val programStart = start.plusSeconds(7200)
+        val program = Program("timeline-show", channel.id, "Show", null, programStart, programStart.plusSeconds(3600), null)
+        composeRule.setContent { TellyoTheme {
+            GuideScreen(GuideUiState(windowStart = start, now = start,
+                rows = listOf(GuideRowState(channel, listOf(program))), isRefreshing = false), onAction = {})
+        } }
+        composeRule.waitForIdle()
+        val label = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(programStart)
+        // The timeline header precedes programme cells; a narrow cell may also show only its start time.
+        val labelLeft = composeRule.onAllNodesWithText(label)[0].getUnclippedBoundsInRoot().left.value
+        val programmeLeft = composeRule.onNodeWithContentDescription("Timeline: Show").getUnclippedBoundsInRoot().left.value
+        assertTrue("Hour label $labelLeft must match programme $programmeLeft", kotlin.math.abs(labelLeft - programmeLeft) < 2f)
+    }
+
+    @Test
+    fun detailReceivesFocusAndCanOpenChannelWithRemote() {
+        val channel = Channel("detail", 1, "Detail", "D", null, "test", ChannelCategory.GENERAL, true)
+        val start = Instant.parse("2026-10-06T12:00:00Z")
+        val program = Program("detail-show", channel.id, "Show", "Description", start, start.plusSeconds(3600), null)
+        var opened = false
+        composeRule.setContent {
+            val state = remember { mutableStateOf(GuideUiState(windowStart = start, now = start,
+                rows = listOf(GuideRowState(channel, listOf(program))), isRefreshing = false)) }
+            TellyoTheme {
+                GuideScreen(state.value, onAction = { action ->
+                    when (action) {
+                        is GuideAction.SelectProgram -> state.value = state.value.copy(selectedProgram = program)
+                        is GuideAction.OpenChannel -> opened = true
+                        else -> Unit
+                    }
+                })
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Detail: Show").performKeyInput { pressKey(Key.Enter) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Otvoriť kanál").assertIsFocused().performKeyInput { pressKey(Key.Enter) }
+        composeRule.runOnIdle { assertTrue(opened) }
+    }
 
     @Test
     fun firstProgramReceivesFocusAndEnterOpensDetails() {

@@ -4,22 +4,35 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.LiveTv
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.SignalCellularAlt
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,15 +41,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -46,17 +55,23 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tellyo.app.core.ui.theme.TellyoColors
 import com.tellyo.app.core.ui.theme.LocalTellyoReduceMotion
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 
 enum class TellyoIcon {
     HOME,
@@ -77,32 +92,56 @@ data class TellyoFocusStyle(
     val idleBackground: Color = TellyoColors.SurfacePrimary,
     val selectedBackground: Color = TellyoColors.SurfaceSecondary,
     val focusedBackground: Color = TellyoColors.SurfaceElevated,
-    val idleBorder: Color = TellyoColors.Divider,
-    val selectedBorder: Color = TellyoColors.PrimaryBlueDark,
-    val focusedBorder: Color = TellyoColors.PrimaryBlueBright,
-    val focusedScale: Float = 1.04f,
-    val glowElevation: Dp = 15.dp,
+    val idleBorder: Color = Color.Transparent,
+    val selectedBorder: Color = Color.Transparent,
+    val focusedBorder: Color = TellyoColors.FocusRing,
+    val focusedScale: Float = 1.015f,
+    val selectedBorderWidth: Dp = 1.dp,
+    val focusedBorderWidth: Dp = 3.dp,
 )
 
 object TellyoFocusStyles {
     val Standard = TellyoFocusStyle()
 
+    val Channel = TellyoFocusStyle(
+        selectedBackground = TellyoColors.PrimaryBlueDark,
+        focusedBackground = Color(0xFF2B4F73),
+        selectedBorder = TellyoColors.PrimaryBlue,
+        focusedBorder = TellyoColors.FocusRing,
+        focusedScale = 1.025f,
+        selectedBorderWidth = 2.dp,
+        focusedBorderWidth = 4.dp,
+    )
+
     val Navigation = TellyoFocusStyle(
         idleBackground = Color.Transparent,
-        selectedBackground = TellyoColors.PrimaryBlueDark,
-        focusedBackground = TellyoColors.PrimaryBlue,
+        selectedBackground = TellyoColors.SurfaceSecondary,
+        focusedBackground = TellyoColors.PrimaryBlueDark,
         idleBorder = Color.Transparent,
-        selectedBorder = TellyoColors.PrimaryBlueDark,
-        focusedBorder = TellyoColors.PrimaryBlueBright,
-        focusedScale = 1.03f,
-        glowElevation = 12.dp,
+        selectedBorder = Color.Transparent,
+        focusedBorder = TellyoColors.FocusRing,
+        focusedScale = 1f,
     )
 
     val FilledSelection = TellyoFocusStyle(
         selectedBackground = TellyoColors.PrimaryBlueDark,
-        focusedBackground = TellyoColors.PrimaryBlue,
-        selectedBorder = TellyoColors.PrimaryBlueDark,
-        focusedBorder = TellyoColors.PrimaryBlueBright,
+        focusedBackground = TellyoColors.SurfaceElevated,
+        selectedBorder = Color.Transparent,
+        focusedBorder = TellyoColors.FocusRing,
+        focusedScale = 1f,
+    )
+
+    // Large imagery and tightly aligned guide cells must not grow over neighbours.
+    val Hero = TellyoFocusStyle(
+        idleBackground = TellyoColors.SurfacePrimary,
+        focusedBackground = TellyoColors.SurfacePrimary,
+        focusedScale = 1f,
+    )
+
+    val PrimaryAction = TellyoFocusStyle(
+        idleBackground = TellyoColors.PrimaryBlueDark,
+        focusedBackground = TellyoColors.SurfaceElevated,
+        focusedScale = 1f,
     )
 }
 
@@ -117,12 +156,7 @@ fun TellyoLogo(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        TellyoIcon(
-            icon = TellyoIcon.PLAY,
-            tint = TellyoColors.PrimaryBlueBright,
-            modifier = Modifier.size(iconSize),
-            contentDescription = "Tellyo",
-        )
+        TellyoBrandMark(modifier = Modifier.size(iconSize))
         Row {
             Text(
                 text = "Telly",
@@ -133,7 +167,7 @@ fun TellyoLogo(
             )
             Text(
                 text = "o",
-                color = TellyoColors.PrimaryBlueBright,
+                color = TellyoColors.BrandBlue,
                 fontSize = textSize,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = (-1).sp,
@@ -149,230 +183,36 @@ fun TellyoIcon(
     tint: Color = TellyoColors.TextPrimary,
     contentDescription: String? = null,
 ) {
-    Canvas(
-        modifier = modifier.semantics {
-            contentDescription?.let { this.contentDescription = it }
-        },
-    ) {
-        drawTellyoIcon(icon, tint)
+    val image = when (icon) {
+        TellyoIcon.HOME -> Icons.Outlined.Home
+        TellyoIcon.LIVE_TV -> Icons.Outlined.LiveTv
+        TellyoIcon.GUIDE -> Icons.AutoMirrored.Outlined.List
+        TellyoIcon.FAVORITES -> Icons.Outlined.FavoriteBorder
+        TellyoIcon.SEARCH -> Icons.Outlined.Search
+        TellyoIcon.SETTINGS -> Icons.Outlined.Settings
+        TellyoIcon.INFO -> Icons.Outlined.Info
+        TellyoIcon.SIGNAL -> Icons.Outlined.SignalCellularAlt
+        TellyoIcon.CHEVRON_RIGHT -> Icons.AutoMirrored.Outlined.KeyboardArrowRight
+        TellyoIcon.CHEVRON_UP -> Icons.Outlined.KeyboardArrowUp
+        TellyoIcon.CHEVRON_DOWN -> Icons.Outlined.KeyboardArrowDown
+        TellyoIcon.PLAY -> Icons.Outlined.PlayArrow
     }
+    Icon(imageVector = image, contentDescription = contentDescription, modifier = modifier, tint = tint)
 }
 
-private fun DrawScope.drawTellyoIcon(icon: TellyoIcon, tint: Color) {
-    val stroke = Stroke(
-        width = 2.2.dp.toPx(),
-        cap = StrokeCap.Round,
-        join = StrokeJoin.Round,
-    )
-    val center = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
-    when (icon) {
-        TellyoIcon.PLAY -> {
-            val path = Path().apply {
-                moveTo(size.width * 0.28f, size.height * 0.16f)
-                lineTo(size.width * 0.80f, size.height * 0.50f)
-                lineTo(size.width * 0.28f, size.height * 0.84f)
-                close()
-            }
-            drawPath(path = path, color = tint, style = Fill)
+// Preserve the supplied brand mark independently of the Material control icons.
+@Composable
+private fun TellyoBrandMark(modifier: Modifier) {
+    Canvas(modifier = modifier) {
+        val path = Path().apply {
+            moveTo(size.width * 0.28f, size.height * 0.16f)
+            lineTo(size.width * 0.80f, size.height * 0.50f)
+            lineTo(size.width * 0.28f, size.height * 0.84f)
+            close()
         }
-
-        TellyoIcon.HOME -> {
-            val path = Path().apply {
-                moveTo(size.width * 0.16f, size.height * 0.46f)
-                lineTo(size.width * 0.50f, size.height * 0.16f)
-                lineTo(size.width * 0.84f, size.height * 0.46f)
-                moveTo(size.width * 0.25f, size.height * 0.40f)
-                lineTo(size.width * 0.25f, size.height * 0.84f)
-                lineTo(size.width * 0.75f, size.height * 0.84f)
-                lineTo(size.width * 0.75f, size.height * 0.40f)
-            }
-            drawPath(path = path, color = tint, style = stroke)
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(size.width * 0.46f, size.height * 0.84f),
-                end = androidx.compose.ui.geometry.Offset(size.width * 0.46f, size.height * 0.60f),
-                strokeWidth = stroke.width,
-                cap = StrokeCap.Round,
-            )
-        }
-
-        TellyoIcon.LIVE_TV -> {
-            drawRoundRect(
-                color = tint,
-                topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.14f, size.height * 0.27f),
-                size = androidx.compose.ui.geometry.Size(size.width * 0.72f, size.height * 0.52f),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(5.dp.toPx()),
-                style = stroke,
-            )
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(size.width * 0.40f, size.height * 0.18f),
-                end = androidx.compose.ui.geometry.Offset(size.width * 0.50f, size.height * 0.30f),
-                strokeWidth = stroke.width,
-                cap = StrokeCap.Round,
-            )
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(size.width * 0.60f, size.height * 0.18f),
-                end = androidx.compose.ui.geometry.Offset(size.width * 0.50f, size.height * 0.30f),
-                strokeWidth = stroke.width,
-                cap = StrokeCap.Round,
-            )
-        }
-
-        TellyoIcon.GUIDE -> {
-            for (index in 0..2) {
-                val y = size.height * (0.27f + index * 0.24f)
-                drawCircle(tint, radius = 1.8.dp.toPx(), center = androidx.compose.ui.geometry.Offset(size.width * 0.20f, y))
-                drawLine(
-                    color = tint,
-                    start = androidx.compose.ui.geometry.Offset(size.width * 0.34f, y),
-                    end = androidx.compose.ui.geometry.Offset(size.width * 0.84f, y),
-                    strokeWidth = stroke.width,
-                    cap = StrokeCap.Round,
-                )
-            }
-        }
-
-        TellyoIcon.FAVORITES -> {
-            val path = Path().apply {
-                moveTo(size.width * 0.50f, size.height * 0.80f)
-                cubicTo(
-                    size.width * 0.42f, size.height * 0.69f,
-                    size.width * 0.16f, size.height * 0.53f,
-                    size.width * 0.16f, size.height * 0.33f,
-                )
-                cubicTo(
-                    size.width * 0.16f, size.height * 0.08f,
-                    size.width * 0.45f, size.height * 0.10f,
-                    size.width * 0.50f, size.height * 0.28f,
-                )
-                cubicTo(
-                    size.width * 0.55f, size.height * 0.10f,
-                    size.width * 0.84f, size.height * 0.08f,
-                    size.width * 0.84f, size.height * 0.33f,
-                )
-                cubicTo(
-                    size.width * 0.84f, size.height * 0.53f,
-                    size.width * 0.58f, size.height * 0.69f,
-                    size.width * 0.50f, size.height * 0.80f,
-                )
-                close()
-            }
-            drawPath(path = path, color = tint, style = stroke)
-        }
-
-        TellyoIcon.SEARCH -> {
-            drawCircle(tint, radius = size.minDimension * 0.27f, center = center, style = stroke)
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(size.width * 0.68f, size.height * 0.68f),
-                end = androidx.compose.ui.geometry.Offset(size.width * 0.86f, size.height * 0.86f),
-                strokeWidth = stroke.width,
-                cap = StrokeCap.Round,
-            )
-        }
-
-        TellyoIcon.SETTINGS -> {
-            drawCircle(tint, radius = size.minDimension * 0.28f, center = center, style = stroke)
-            drawCircle(tint, radius = size.minDimension * 0.09f, center = center, style = stroke)
-            for (index in 0 until 8) {
-                val angle = Math.toRadians(index * 45.0)
-                val inner = size.minDimension * 0.37f
-                val outer = size.minDimension * 0.47f
-                drawLine(
-                    color = tint,
-                    start = androidx.compose.ui.geometry.Offset(
-                        center.x + kotlin.math.cos(angle).toFloat() * inner,
-                        center.y + kotlin.math.sin(angle).toFloat() * inner,
-                    ),
-                    end = androidx.compose.ui.geometry.Offset(
-                        center.x + kotlin.math.cos(angle).toFloat() * outer,
-                        center.y + kotlin.math.sin(angle).toFloat() * outer,
-                    ),
-                    strokeWidth = stroke.width,
-                    cap = StrokeCap.Round,
-                )
-            }
-        }
-
-        TellyoIcon.INFO -> {
-            drawCircle(tint, radius = size.minDimension * 0.35f, center = center, style = stroke)
-            drawCircle(tint, radius = 1.5.dp.toPx(), center = center.copy(y = size.height * 0.34f))
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(size.width * 0.50f, size.height * 0.44f),
-                end = androidx.compose.ui.geometry.Offset(size.width * 0.50f, size.height * 0.68f),
-                strokeWidth = stroke.width,
-                cap = StrokeCap.Round,
-            )
-        }
-
-        TellyoIcon.SIGNAL -> {
-            for (index in 0..3) {
-                val barHeight = size.height * (0.20f + index * 0.17f)
-                drawRoundRect(
-                    color = tint,
-                    topLeft = androidx.compose.ui.geometry.Offset(size.width * (0.16f + index * 0.19f), size.height - barHeight),
-                    size = androidx.compose.ui.geometry.Size(size.width * 0.11f, barHeight),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5.dp.toPx()),
-                )
-            }
-        }
-
-        TellyoIcon.CHEVRON_RIGHT -> {
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(size.width * 0.36f, size.height * 0.18f),
-                end = androidx.compose.ui.geometry.Offset(size.width * 0.66f, size.height * 0.50f),
-                strokeWidth = stroke.width,
-                cap = StrokeCap.Round,
-            )
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(size.width * 0.66f, size.height * 0.50f),
-                end = androidx.compose.ui.geometry.Offset(size.width * 0.36f, size.height * 0.82f),
-                strokeWidth = stroke.width,
-                cap = StrokeCap.Round,
-            )
-        }
-
-        TellyoIcon.CHEVRON_UP -> {
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(size.width * 0.18f, size.height * 0.62f),
-                end = androidx.compose.ui.geometry.Offset(size.width * 0.50f, size.height * 0.30f),
-                strokeWidth = stroke.width,
-                cap = StrokeCap.Round,
-            )
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(size.width * 0.50f, size.height * 0.30f),
-                end = androidx.compose.ui.geometry.Offset(size.width * 0.82f, size.height * 0.62f),
-                strokeWidth = stroke.width,
-                cap = StrokeCap.Round,
-            )
-        }
-
-        TellyoIcon.CHEVRON_DOWN -> {
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(size.width * 0.18f, size.height * 0.38f),
-                end = androidx.compose.ui.geometry.Offset(size.width * 0.50f, size.height * 0.70f),
-                strokeWidth = stroke.width,
-                cap = StrokeCap.Round,
-            )
-            drawLine(
-                color = tint,
-                start = androidx.compose.ui.geometry.Offset(size.width * 0.50f, size.height * 0.70f),
-                end = androidx.compose.ui.geometry.Offset(size.width * 0.82f, size.height * 0.38f),
-                strokeWidth = stroke.width,
-                cap = StrokeCap.Round,
-            )
-        }
+        drawPath(path, color = TellyoColors.BrandBlue)
     }
 }
-
 @Composable
 fun TellyoFocusableSurface(
     modifier: Modifier = Modifier,
@@ -381,6 +221,7 @@ fun TellyoFocusableSurface(
     focusRequester: FocusRequester? = null,
     contentDescription: String? = null,
     focusStyle: TellyoFocusStyle = TellyoFocusStyles.Standard,
+    onFocusChanged: (Boolean) -> Unit = {},
     onKeyInput: (Key, KeyEventType) -> Boolean = { _, _ -> false },
     onClick: () -> Unit = {},
     content: @Composable () -> Unit,
@@ -393,7 +234,7 @@ fun TellyoFocusableSurface(
         animationSpec = tween(durationMillis = focusAnimationDuration),
         label = "focus-scale",
     )
-    val backgroundColor by animateColorAsState(
+    val backgroundColor = animateColorAsState(
         targetValue = when {
             isFocused -> focusStyle.focusedBackground
             selected -> focusStyle.selectedBackground
@@ -411,26 +252,29 @@ fun TellyoFocusableSurface(
     Box(
         modifier = modifier
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
-            .onFocusChanged { isFocused = it.isFocused }
+            .onFocusChanged {
+                if (isFocused != it.isFocused) {
+                    isFocused = it.isFocused
+                    onFocusChanged(isFocused)
+                }
+            }
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .then(
-                if (isFocused) {
-                    Modifier.shadow(
-                        elevation = focusStyle.glowElevation,
-                        shape = shape,
-                        clip = false,
-                        ambientColor = TellyoColors.FocusGlow,
-                        spotColor = TellyoColors.FocusGlow,
-                    )
-                } else {
-                    Modifier
+            .drawWithCache {
+                val outline = shape.createOutline(size, layoutDirection, this)
+                onDrawBehind { drawOutline(outline, color = backgroundColor.value) }
+            }
+            .border(
+                when {
+                    isFocused -> focusStyle.focusedBorderWidth
+                    selected -> focusStyle.selectedBorderWidth
+                    else -> 1.dp
                 },
+                borderColor,
+                shape,
             )
-            .background(backgroundColor, shape)
-            .border(if (isFocused) 3.dp else 1.dp, borderColor, shape)
             .clip(shape)
             .focusable()
             .onKeyEvent { event ->
@@ -469,22 +313,25 @@ fun TellyoButton(
     modifier: Modifier = Modifier,
     icon: TellyoIcon? = null,
     focusRequester: FocusRequester? = null,
+    primary: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit = {},
 ) {
     TellyoFocusableSurface(
-        modifier = modifier.height(42.dp),
+        modifier = modifier.height(42.dp).semantics { if (!enabled) disabled() },
         shape = RoundedCornerShape(10.dp),
         focusRequester = focusRequester,
         contentDescription = text,
-        onClick = onClick,
+        focusStyle = if (primary) TellyoFocusStyles.PrimaryAction else TellyoFocusStyles.Standard,
+        onClick = { if (enabled) onClick() },
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp),
+            modifier = Modifier.fillMaxHeight().padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             icon?.let { TellyoIcon(it, tint = TellyoColors.TextSecondary, modifier = Modifier.size(20.dp)) }
-            Text(text = text, color = TellyoColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(text = text, color = TellyoColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
         }
     }
 }
@@ -501,11 +348,11 @@ fun SectionHeading(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            text = text.uppercase(),
+            text = text,
             color = TellyoColors.TextPrimary,
-            fontSize = 16.sp,
+            fontSize = 21.sp,
             fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.7.sp,
+            letterSpacing = (-0.2).sp,
         )
         trailing?.invoke()
     }
@@ -556,6 +403,7 @@ fun ChannelLogo(
     modifier: Modifier = Modifier,
     large: Boolean = false,
     textSize: TextUnit? = null,
+    logoUrl: String? = null,
 ) {
     val (label, color) = when (logoKey) {
         "stvr" -> ":1" to Color(0xFFFF1D55)
@@ -563,9 +411,6 @@ fun ChannelLogo(
         "joj-plus" -> "JOJ+" to Color(0xFFE3273E)
         "joj-krimi" -> "KRIMI" to Color(0xFFE3273E)
         "joj-24" -> "JOJ24" to Color(0xFFE3273E)
-        "joj-sport" -> "JOJ Š" to Color(0xFFF59E0B)
-        "jojko" -> "JOJko" to Color(0xFF35B8E8)
-        "joj-svet" -> "JOJ S" to Color(0xFFF7F9FC)
         "markiza" -> "M" to Color(0xFFE4236B)
         "markiza-doma" -> "DOMA" to Color(0xFFE4236B)
         "markiza-dajto" -> "DAJTO" to Color(0xFF36A7E8)
@@ -574,16 +419,48 @@ fun ChannelLogo(
         "ta3" -> "ta3" to Color(0xFFF7F9FC)
         "24" -> ":24" to Color(0xFFE02B7B)
         "dvojka" -> ":2" to Color(0xFF14B8B7)
-        else -> "rtv:" to Color(0xFFE52866)
+        "sport" -> ":Š" to TellyoColors.TextPrimary
+        else -> logoKey to TellyoColors.TextSecondary
     }
-    Text(
-        text = label,
-        modifier = modifier,
-        color = color,
-        fontSize = textSize ?: if (large) 42.sp else 23.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = (-1.2).sp,
-    )
+    val isMarkizaLogo = logoKey == "markiza" || logoKey.startsWith("markiza-")
+    val imageModifier = modifier
+        .width(if (large) 112.dp else if (isMarkizaLogo) 104.dp else 72.dp)
+        .height(if (large) 58.dp else 36.dp)
+    val bundledLogo = bundledChannelLogo(logoKey)
+    val fallback: @Composable () -> Unit = {
+        if (bundledLogo != null) {
+            Image(
+                painter = painterResource(bundledLogo),
+                contentDescription = "$label logo",
+                contentScale = ContentScale.Fit,
+                modifier = imageModifier,
+            )
+        } else {
+            Text(
+                text = label,
+                modifier = modifier,
+                color = color,
+                fontSize = textSize ?: if (large) 42.sp else 23.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-1.2).sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+    if (logoUrl.isNullOrBlank()) {
+        fallback()
+    } else {
+        SubcomposeAsyncImage(
+            model = logoUrl,
+            contentDescription = "$label logo",
+            contentScale = ContentScale.Fit,
+            modifier = imageModifier,
+            loading = { fallback() },
+            error = { fallback() },
+            success = { SubcomposeAsyncImageContent() },
+        )
+    }
 }
 
 @Composable

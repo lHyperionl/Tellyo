@@ -16,7 +16,7 @@ object DatabaseModule {
     @Singleton
     fun provideTellyoDatabase(@ApplicationContext context: Context): TellyoDatabase =
         Room.databaseBuilder(context, TellyoDatabase::class.java, "tellyo.db")
-            .addMigrations(TellyoDatabase.MIGRATION_1_2)
+            .addMigrations(TellyoDatabase.MIGRATION_1_2, TellyoDatabase.MIGRATION_2_3, TellyoDatabase.MIGRATION_3_4)
             .build()
 
     @Provides

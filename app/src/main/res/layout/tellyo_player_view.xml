@@ -7,4 +7,4 @@
     android:background="@android:color/black"
     app:resize_mode="fit"
     app:surface_type="surface_view"
-    app:use_controller="true" />
+    app:use_controller="false" />

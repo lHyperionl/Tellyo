@@ -12,6 +12,15 @@ import javax.inject.Singleton
 abstract class ProviderModule {
     @Binds
     @Singleton
+    abstract fun bindSlovakPlaylistRepository(repository: CachedSlovakPlaylistRepository): SlovakPlaylistRepository
+
+    @Binds
+    @IntoSet
+    @Singleton
+    abstract fun bindSlovakIptvProvider(provider: SlovakIptvProvider): TvProvider
+
+    @Binds
+    @Singleton
     abstract fun bindStvrOfficialApi(api: HttpStvrOfficialApi): StvrOfficialApi
 
     @Binds
@@ -28,4 +37,9 @@ abstract class ProviderModule {
     @IntoSet
     @Singleton
     abstract fun bindMarkizaTvProvider(provider: MarkizaTvProvider): TvProvider
+
+    @Binds
+    @IntoSet
+    @Singleton
+    abstract fun bindTa3TvProvider(provider: Ta3TvProvider): TvProvider
 }

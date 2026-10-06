@@ -49,6 +49,7 @@ class OkHttpStreamHealthChecker @Inject constructor(
                 )
             }
         }.getOrElse { error ->
+            if (error is kotlinx.coroutines.CancellationException) throw error
             StreamHealthResult(
                 isReachable = false,
                 statusCode = null,

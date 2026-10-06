@@ -26,6 +26,7 @@ class EpgRefreshWorker(
         ).epgRepository().refresh()
         Result.success()
     }.getOrElse {
+        if (it is kotlinx.coroutines.CancellationException) throw it
         if (runAttemptCount < MAX_RETRY_ATTEMPTS) Result.retry() else Result.failure()
     }
 

@@ -1,26 +1,31 @@
 package com.tellyo.app.core.provider
 
 import com.tellyo.app.core.model.Channel
-import com.tellyo.app.core.model.ChannelCategory
 import com.tellyo.app.core.model.StreamResolution
 import com.tellyo.app.core.model.StreamType
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Official STVR catalogue and stream-resolution boundary.
- */
+/** Official STVR stream-resolution boundary. Channel metadata comes from the local catalogue. */
 @Singleton
 class StvrTvProvider @Inject constructor(
     private val officialApi: StvrOfficialApi,
+    private val channelCatalog: ChannelCatalogRepository,
+    private val authorizedConfig: AuthorizedProviderConfigRepository = EmptyAuthorizedProviderConfigRepository,
 ) : TvProvider {
     override val id: String = PROVIDER_ID
 
-    override suspend fun getChannels(): List<Channel> = channels
+    override suspend fun getChannels(): List<Channel> = channelCatalog.getChannels()
+        .filter { it.providerId == id }
+        .filter(Channel::enabled)
 
     override suspend fun resolveStream(channel: Channel): StreamResolution {
         if (channel.providerId != id || !channel.enabled) {
             return StreamResolution.Unavailable("Channel is not available in the STVR provider")
+        }
+
+        authorizedConfig.getStream(channel.id)?.let { source ->
+            return StreamResolution.Playable(source)
         }
 
         val live = officialApi.fetchLive(channel)
@@ -45,48 +50,5 @@ class StvrTvProvider @Inject constructor(
             SPORT_ID -> "4"
             else -> null
         }
-
-        val channels: List<Channel> = listOf(
-            Channel(
-                id = JEDNOTKA_ID,
-                number = 1,
-                name = "Jednotka",
-                shortName = "Jednotka",
-                logoUrl = null,
-                providerId = PROVIDER_ID,
-                category = ChannelCategory.GENERAL,
-                enabled = true,
-            ),
-            Channel(
-                id = DVOJKA_ID,
-                number = 2,
-                name = "Dvojka",
-                shortName = "Dvojka",
-                logoUrl = null,
-                providerId = PROVIDER_ID,
-                category = ChannelCategory.CULTURE,
-                enabled = true,
-            ),
-            Channel(
-                id = NEWS_24_ID,
-                number = 3,
-                name = ":24",
-                shortName = ":24",
-                logoUrl = null,
-                providerId = PROVIDER_ID,
-                category = ChannelCategory.NEWS,
-                enabled = true,
-            ),
-            Channel(
-                id = SPORT_ID,
-                number = 4,
-                name = "Šport",
-                shortName = "Šport",
-                logoUrl = null,
-                providerId = PROVIDER_ID,
-                category = ChannelCategory.SPORTS,
-                enabled = true,
-            ),
-        )
     }
 }

@@ -10,8 +10,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class SettingsUiState(
     val reduceMotion: Boolean = false,
@@ -31,6 +34,7 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+    private val actionMutex = Mutex()
 
     init {
         viewModelScope.launch {
@@ -47,16 +51,19 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onAction(action: SettingsAction) {
-        when (action) {
-            SettingsAction.ToggleReduceMotion -> viewModelScope.launch {
-                settingsRepository.setReduceMotion(!_uiState.value.reduceMotion)
-            }
-            SettingsAction.CycleVideoQuality -> viewModelScope.launch {
-                settingsRepository.setVideoQuality(nextVideoQuality(_uiState.value.videoQuality))
-            }
-            SettingsAction.Reset -> viewModelScope.launch {
-                settingsRepository.setReduceMotion(false)
-                settingsRepository.setVideoQuality(VideoQualityPreference.AUTO)
+        viewModelScope.launch {
+            actionMutex.withLock {
+                // Read the committed preferences after the preceding action;
+                // the UI flow may not yet have delivered that write.
+                val current = settingsRepository.settings.first()
+                when (action) {
+                    SettingsAction.ToggleReduceMotion -> settingsRepository.setReduceMotion(!current.reduceMotion)
+                    SettingsAction.CycleVideoQuality -> settingsRepository.setVideoQuality(nextVideoQuality(current.videoQuality))
+                    SettingsAction.Reset -> {
+                        settingsRepository.setReduceMotion(false)
+                        settingsRepository.setVideoQuality(VideoQualityPreference.AUTO)
+                    }
+                }
             }
         }
     }

@@ -11,6 +11,7 @@ sealed interface PlaybackState {
     data class Playing(val channelId: String) : PlaybackState
     data class Paused(val channelId: String) : PlaybackState
     data object Retrying : PlaybackState
+    data class OfficialEmbed(val url: String) : PlaybackState
     data class External(
         val packageName: String?,
         val deepLink: Uri? = null,

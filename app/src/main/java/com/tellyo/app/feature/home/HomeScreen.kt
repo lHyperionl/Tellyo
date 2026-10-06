@@ -2,12 +2,12 @@ package com.tellyo.app.feature.home
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -20,28 +20,36 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import coil.compose.AsyncImage
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import com.tellyo.app.core.model.Channel
 import com.tellyo.app.core.model.Program
 import com.tellyo.app.core.ui.components.ChannelLogo
@@ -67,9 +75,7 @@ import com.tellyo.app.feature.settings.SettingsUiState
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
-import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.min
 
@@ -135,7 +141,7 @@ private fun HomeDashboardFrame(
     }
 
     LaunchedEffect(uiState.selectedDestination, uiState.channels.size) {
-        if (uiState.selectedDestination == NavigationDestination.HOME) {
+        if (uiState.selectedDestination == NavigationDestination.HOME && !uiState.restoreChannelFocus) {
             firstNavigationFocus.requestFocus()
         }
     }
@@ -143,18 +149,11 @@ private fun HomeDashboardFrame(
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF020714),
-                        TellyoColors.BackgroundPrimary,
-                        Color(0xFF04152C),
-                    ),
-                ),
-            )
-            .padding(start = 36.dp, top = 32.dp, end = 76.dp, bottom = 26.dp),
+            .background(TellyoColors.BackgroundPrimary)
+            .padding(start = 48.dp, top = 42.dp, end = 48.dp, bottom = 38.dp),
     ) {
         NavigationSidebar(
+            now = uiState.now,
             selectedDestination = uiState.selectedDestination,
             firstNavigationFocus = firstNavigationFocus,
             contentFocus = if (uiState.selectedDestination == NavigationDestination.HOME) {
@@ -167,7 +166,7 @@ private fun HomeDashboardFrame(
             },
         )
 
-        Spacer(modifier = Modifier.width(28.dp))
+        Spacer(modifier = Modifier.width(40.dp))
 
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             if (uiState.selectedDestination == NavigationDestination.HOME) {
@@ -231,7 +230,7 @@ private data class ChannelPresentation(
     val displayProgram: Program?,
 )
 
-private fun HomeUiState.presentation(channel: Channel, now: Instant = Instant.now()): ChannelPresentation {
+private fun HomeUiState.presentation(channel: Channel, now: Instant = this.now): ChannelPresentation {
     val programs = programsByChannel[channel.id].orEmpty().sortedBy { it.start }
     val current = programs.firstOrNull { it.start <= now && it.end.isAfter(now) }
     // Do not present an expired cached record as if it were the current show.
@@ -250,31 +249,33 @@ internal fun channelLogoKey(channel: Channel): String = when (channel.id) {
     "stvr-jednotka" -> "stvr"
     "stvr-dvojka" -> "dvojka"
     "stvr-24" -> "24"
+    "stvr-sport" -> "sport"
     "joj" -> "joj"
     "joj-plus" -> "joj-plus"
     "joj-krimi" -> "joj-krimi"
     "joj-24" -> "joj-24"
-    "joj-sport", "joj-sport-2" -> "joj-sport"
-    "jojko" -> "jojko"
-    "joj-svet" -> "joj-svet"
     "markiza" -> "markiza"
     "markiza-doma" -> "markiza-doma"
     "markiza-dajto" -> "markiza-dajto"
     "markiza-krimi" -> "markiza-krimi"
     "markiza-klasik" -> "markiza-klasik"
-    else -> "stvr"
+    "ta3" -> "ta3"
+    else -> channel.shortName
 }
 
 private fun formatTime(instant: Instant): String =
-    DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(instant)
+    timeFormatter.withZone(ZoneId.systemDefault()).format(instant)
 
 private fun formatDateTime(instant: Instant): String =
-    DateTimeFormatter.ofPattern("d. MMMM yyyy", Locale("sk", "SK"))
+    dateFormatter
         .withZone(ZoneId.systemDefault())
         .format(instant)
 
+private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val dateFormatter = DateTimeFormatter.ofPattern("d. MMMM yyyy", Locale("sk", "SK"))
+
 private fun formatProgramRange(program: Program?): String =
-    program?.let { "${formatTime(it.start)} – ${formatTime(it.end)}" } ?: "Čas nie je dostupný"
+    program?.let { "${formatTime(it.start)} - ${formatTime(it.end)}" } ?: ""
 
 private fun programProgress(program: Program?, now: Instant = Instant.now()): Float {
     if (program == null || !program.end.isAfter(program.start)) return 0f
@@ -286,6 +287,7 @@ private fun programProgress(program: Program?, now: Instant = Instant.now()): Fl
 
 @Composable
 private fun NavigationSidebar(
+    now: Instant,
     selectedDestination: NavigationDestination,
     firstNavigationFocus: FocusRequester,
     contentFocus: FocusRequester,
@@ -304,7 +306,7 @@ private fun NavigationSidebar(
 
     Column(
         modifier = Modifier
-            .width(250.dp)
+            .width(224.dp)
             .fillMaxHeight(),
     ) {
         TellyoLogo(
@@ -312,7 +314,7 @@ private fun NavigationSidebar(
             iconSize = 37.dp,
             textSize = 42.sp,
         )
-        Spacer(modifier = Modifier.height(53.dp))
+        Spacer(modifier = Modifier.height(48.dp))
 
         navigationItems.forEachIndexed { index, (destination, icon) ->
             TellyoFocusableSurface(
@@ -330,7 +332,7 @@ private fun NavigationSidebar(
                         }
                         if (index < navigationItems.lastIndex) down = itemFocusRequesters[index + 1]
                     },
-                shape = RoundedCornerShape(11.dp),
+                shape = RoundedCornerShape(10.dp),
                 selected = selectedDestination == destination,
                 focusRequester = if (index == 0) firstNavigationFocus else itemFocusRequesters[index],
                 contentDescription = destination.label,
@@ -338,13 +340,13 @@ private fun NavigationSidebar(
                 onClick = { onDestinationSelected(destination) },
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 20.dp),
+                    modifier = Modifier.fillMaxHeight().padding(horizontal = 18.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     TellyoIcon(
                         icon = icon,
-                        modifier = Modifier.size(30.dp),
+                        modifier = Modifier.size(25.dp),
                         tint = if (selectedDestination == destination) {
                             TellyoColors.TextPrimary
                         } else {
@@ -358,32 +360,31 @@ private fun NavigationSidebar(
                         } else {
                             TellyoColors.TextSecondary
                         },
-                        fontSize = 20.sp,
+                        fontSize = 24.sp,
                         fontWeight = if (selectedDestination == destination) FontWeight.Medium else FontWeight.Normal,
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(15.dp))
+            Spacer(modifier = Modifier.height(10.dp))
         }
 
         Spacer(modifier = Modifier.weight(1f))
-        val now = Instant.now()
-        Column(modifier = Modifier.padding(start = 10.dp, bottom = 72.dp)) {
+        Column(modifier = Modifier.padding(start = 18.dp, bottom = 12.dp)) {
             Text(
                 text = DateTimeFormatter.ofPattern("EEEE", Locale("sk", "SK"))
                     .withZone(ZoneId.systemDefault())
                     .format(now)
                     .replaceFirstChar { it.titlecase(Locale("sk", "SK")) },
                 color = TellyoColors.TextSecondary,
-                fontSize = 17.sp,
+                fontSize = 22.sp,
             )
-            Text(text = formatDateTime(now), color = TellyoColors.TextSecondary, fontSize = 17.sp)
+            Text(text = formatDateTime(now), color = TellyoColors.TextSecondary, fontSize = 22.sp)
             Spacer(modifier = Modifier.height(7.dp))
             Text(
                 text = formatTime(now),
-                color = TellyoColors.PrimaryBlue,
-                fontSize = 43.sp,
-                fontWeight = FontWeight.Medium,
+                color = TellyoColors.TextPrimary,
+                fontSize = 46.sp,
+                fontWeight = FontWeight.Normal,
             )
         }
     }
@@ -396,30 +397,28 @@ private fun DashboardContent(
     navigationFocus: FocusRequester,
     onAction: (HomeAction) -> Unit,
 ) {
-    val playerButtonFocus = remember { FocusRequester() }
     val favoriteFocus = remember { FocusRequester() }
     val epgFocus = remember { FocusRequester() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(top = 18.dp)
             .focusGroup(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         HeroPanel(
             uiState = uiState,
             heroFocus = heroFocus,
             navigationFocus = navigationFocus,
-            playerButtonFocus = playerButtonFocus,
             favoriteFocus = favoriteFocus,
             onAction = onAction,
         )
 
+        SectionHeading(text = "Kanály")
         FavoriteChannels(
             uiState = uiState,
             firstFocus = favoriteFocus,
-            playerButtonFocus = playerButtonFocus,
+            heroFocus = heroFocus,
             epgFocus = epgFocus,
             navigationFocus = navigationFocus,
             onAction = onAction,
@@ -428,6 +427,7 @@ private fun DashboardContent(
         SectionHeading(text = "TV program")
         EpgPreview(
             uiState = uiState,
+            modifier = Modifier.weight(1f),
             firstProgramFocus = epgFocus,
             favoriteFocus = favoriteFocus,
             navigationFocus = navigationFocus,
@@ -441,237 +441,185 @@ private fun HeroPanel(
     uiState: HomeUiState,
     heroFocus: FocusRequester,
     navigationFocus: FocusRequester,
-    playerButtonFocus: FocusRequester,
     favoriteFocus: FocusRequester,
     onAction: (HomeAction) -> Unit,
 ) {
     val selected = uiState.channels
         .firstOrNull { it.id == uiState.selectedChannelId }
         ?.let { uiState.presentation(it) }
-    Box(
+    val largeText = LocalDensity.current.fontScale > 1.15f
+    TellyoFocusableSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(335.dp),
+            .height(310.dp)
+            .focusProperties {
+                left = navigationFocus
+                down = favoriteFocus
+            },
+        shape = RoundedCornerShape(16.dp),
+        focusStyle = TellyoFocusStyles.Hero,
+        focusRequester = heroFocus,
+        contentDescription = "Náhľad ${selected?.channel?.name ?: "Tellyo"}",
+        onClick = { onAction(HomeAction.OpenPlayer) },
     ) {
-        TellyoFocusableSurface(
-            modifier = Modifier
-                .fillMaxSize()
-                .focusProperties {
-                    left = navigationFocus
-                    down = playerButtonFocus
-                },
-            shape = RoundedCornerShape(20.dp),
-            selected = true,
-            focusRequester = heroFocus,
-            contentDescription = "Náhľad ${selected?.channel?.name ?: "Tellyo"}",
-            onClick = { onAction(HomeAction.OpenPlayer) },
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color(0xFF020918).copy(alpha = 0.99f),
-                                    TellyoColors.BackgroundSecondary.copy(alpha = 0.96f),
-                                    TellyoColors.SurfacePrimary.copy(alpha = 0.90f),
-                                ),
-                                startX = 0f,
-                                endX = 780f,
-                            ),
-                        ),
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (selected != null) {
+                ProgramPreviewArtwork(
+                    presentation = selected,
+                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(620.dp),
                 )
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight()
-                        .width(650.dp),
-                ) {
-                    ProgramPreviewArtwork(
-                        program = selected?.currentProgram,
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .fillMaxHeight()
-                            .width(560.dp),
+            }
+            // Shade the complete hero, so the artwork cannot introduce a seam.
+            Box(
+                modifier = Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to Color.Transparent,
+                            0.55f to Color.Transparent,
+                            1f to TellyoColors.BackgroundPrimary.copy(alpha = 0.55f),
+                        ),
+                    ),
+                ),
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .width(620.dp)
+                    .padding(horizontal = 32.dp, vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (selected == null) {
+                    Text(
+                        text = if (uiState.isLoading) "Načítavam kanály…" else {
+                            uiState.dataError ?: "Kanály nie sú dostupné."
+                        },
+                        color = TellyoColors.TextSecondary,
+                        fontSize = 24.sp,
                     )
-                    // Extend the artwork transition into the dark information
-                    // area so the image never ends at a hard vertical seam.
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .fillMaxHeight()
-                            .width(250.dp)
-                            .background(
-                                Brush.horizontalGradient(
-                                    colorStops = arrayOf(
-                                        0f to TellyoColors.SurfacePrimary.copy(alpha = 0.98f),
-                                        0.42f to TellyoColors.SurfacePrimary.copy(alpha = 0.86f),
-                                        0.78f to TellyoColors.SurfacePrimary.copy(alpha = 0.34f),
-                                        1f to Color.Transparent,
-                                    ),
-                                ),
-                            ),
-                    )
-                }
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .width(455.dp)
-                        .padding(start = 36.dp, top = 24.dp, bottom = 22.dp),
-                    verticalArrangement = Arrangement.spacedBy(9.dp),
-                ) {
-                    if (selected == null) {
-                        Text(
-                            text = if (uiState.isLoading) "Načítavam kanály…" else {
-                                uiState.dataError ?: "Kanály nie sú dostupné."
-                            },
-                            color = TellyoColors.TextSecondary,
-                            fontSize = 20.sp,
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        ChannelLogo(
+                            channelLogoKey(selected.channel),
+                            modifier = Modifier.width(120.dp),
+                            textSize = 36.sp,
+                            logoUrl = selected.channel.logoUrl,
                         )
-                    } else {
+                        Text(
+                            text = selected.channel.name,
+                            modifier = Modifier.weight(1f, fill = false),
+                            color = TellyoColors.TextSecondary,
+                            fontSize = 26.sp,
+                            lineHeight = 32.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         if (selected.currentProgram != null) LiveBadge()
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            ChannelLogo(channelLogoKey(selected.channel), large = true, textSize = 58.sp)
-                            Spacer(modifier = Modifier.width(24.dp))
-                            Column {
-                                Text(
-                                    text = selected.channel.name,
-                                    color = TellyoColors.TextPrimary,
-                                    fontSize = 34.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    text = selected.displayProgram?.title ?: "Programové údaje nie sú dostupné",
-                                    color = TellyoColors.TextSecondary,
-                                    fontSize = 20.sp,
-                                )
-                            }
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = formatProgramRange(selected.displayProgram),
-                                color = TellyoColors.TextSecondary,
-                                fontSize = 16.sp,
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            TellyoProgressBar(
-                                progress = programProgress(selected.currentProgram),
-                                modifier = Modifier.width(195.dp),
-                            )
-                        }
-                        Text(
-                            text = selected.displayProgram?.description
-                                ?: "Programový sprievod pre tento kanál nie je dostupný.",
-                            color = TellyoColors.TextSecondary,
-                            fontSize = 16.sp,
-                            lineHeight = 23.sp,
-                        )
-                        TellyoButton(
-                            text = "Viac informácií",
-                            icon = TellyoIconType.INFO,
-                            focusRequester = playerButtonFocus,
-                            modifier = Modifier
-                                .width(178.dp)
-                                .focusProperties {
-                                    up = heroFocus
-                                    down = favoriteFocus
-                                    left = navigationFocus
-                                },
-                            onClick = { onAction(HomeAction.OpenPlayer) },
-                        )
                     }
+                    Text(
+                        text = selected.displayProgram?.title ?: selected.channel.name,
+                        color = TellyoColors.TextPrimary,
+                        fontSize = 44.sp,
+                        lineHeight = 50.sp,
+                        letterSpacing = (-0.7).sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = if (largeText) 1 else 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    selected.displayProgram?.let { program ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        ) {
+                            Text(
+                                text = formatProgramRange(program),
+                                color = TellyoColors.TextSecondary,
+                                fontSize = 22.sp,
+                                lineHeight = 28.sp,
+                            )
+                            if (selected.currentProgram != null) TellyoProgressBar(
+                                progress = programProgress(selected.currentProgram, uiState.now),
+                                modifier = Modifier.width(150.dp),
+                                height = 3.dp,
+                            )
+                        }
+                    }
+                    val description = selected.displayProgram?.description?.takeIf { it.isNotBlank() }
+                        ?: if (selected.displayProgram == null) {
+                            "Programový sprievod pre tento kanál nie je dostupný."
+                        } else null
+                    if (description != null) Text(
+                        text = description,
+                        modifier = Modifier.weight(1f, fill = false),
+                        color = TellyoColors.TextSecondary,
+                        fontSize = 24.sp,
+                        lineHeight = 30.sp,
+                        maxLines = if (largeText) 2 else 4,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
-
     }
 }
 
 @Composable
 private fun ProgramPreviewArtwork(
-    program: Program?,
+    presentation: ChannelPresentation,
     modifier: Modifier = Modifier,
 ) {
-    val categoryColor = when (program?.category?.lowercase()) {
-        "news", "správy" -> Color(0xFF168BFF)
-        "sport", "šport" -> Color(0xFFFF8A24)
-        "culture", "kultúra" -> Color(0xFFE02B7B)
-        else -> TellyoColors.PrimaryBlueBright
-    }
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        categoryColor.copy(alpha = 0.18f),
-                        TellyoColors.BackgroundSecondary,
-                        Color(0xFF020714),
+    Box(modifier = modifier) {
+        val program = presentation.currentProgram
+        if (program?.artworkUrl != null) {
+            SubcomposeAsyncImage(
+                model = program.artworkUrl,
+                contentDescription = "Obrazový náhľad programu ${program.title}",
+                // Preserve the broadcaster's complete thumbnail, including heads
+                // and captions. Wide hero geometry must not enlarge a 16:9 image.
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.CenterEnd,
+                modifier = Modifier.fillMaxSize(),
+                loading = { ChannelArtworkFallback(presentation) },
+                error = { ChannelArtworkFallback(presentation) },
+                success = { SubcomposeAsyncImageContent() },
+            )
+        } else {
+            // Use channel identity when programme artwork is unavailable.
+            // A generic photograph would imply content the provider did not supply.
+            ChannelArtworkFallback(presentation)
+        }
+        Box(
+            modifier = Modifier.fillMaxSize().background(
+                Brush.horizontalGradient(
+                    colorStops = arrayOf(
+                        0f to TellyoColors.SurfacePrimary,
+                        0.1f to TellyoColors.SurfacePrimary.copy(alpha = 0.75f),
+                        0.25f to TellyoColors.SurfacePrimary.copy(alpha = 0.1f),
+                        0.35f to Color.Transparent,
+                        1f to Color.Transparent,
                     ),
                 ),
             ),
-    ) {
-        if (program?.artworkUrl != null) {
-            AsyncImage(
-                model = program.artworkUrl,
-                contentDescription = "Obrazový náhľad programu ${program.title}",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(20.dp)),
-                alpha = 0.88f,
-            )
-        } else if (program != null) {
-            Text(
-                text = program.title,
-                color = categoryColor.copy(alpha = 0.25f),
-                fontSize = 48.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .width(420.dp)
-                    .padding(end = 28.dp),
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        colorStops = arrayOf(
-                            0f to Color.Transparent,
-                            0.58f to Color.Transparent,
-                            1f to Color(0xFF020918).copy(alpha = 0.18f),
-                        ),
-                    ),
-                ),
         )
-        if (program != null) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 28.dp, bottom = 24.dp),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = "PROGRAM PRÁVE PREBIEHA",
-                    color = categoryColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                )
-                Text(
-                    text = program.title,
-                    color = TellyoColors.TextPrimary,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                )
-            }
-        }
+    }
+}
+
+@Composable
+private fun ChannelArtworkFallback(presentation: ChannelPresentation) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(TellyoColors.BackgroundSecondary),
+        contentAlignment = Alignment.Center,
+    ) {
+        ChannelLogo(
+            logoKey = channelLogoKey(presentation.channel),
+            large = true,
+            textSize = 90.sp,
+            logoUrl = presentation.channel.logoUrl,
+            modifier = Modifier.width(240.dp).height(130.dp),
+        )
     }
 }
 
@@ -679,96 +627,112 @@ private fun ProgramPreviewArtwork(
 private fun FavoriteChannels(
     uiState: HomeUiState,
     firstFocus: FocusRequester,
-    playerButtonFocus: FocusRequester,
+    heroFocus: FocusRequester,
     epgFocus: FocusRequester,
     navigationFocus: FocusRequester,
     onAction: (HomeAction) -> Unit,
 ) {
     // Keep every registered channel reachable through the horizontally
     // navigable row; LazyRow provides the off-screen scrolling on TV.
-    val channels = uiState.homeChannels()
-    val cardFocusRequesters = remember(channels.map { it.id }) {
-        List(channels.size) { FocusRequester() }
+    val channels = remember(uiState.channels, uiState.favoriteSettings) { uiState.homeChannels() }
+    val largeText = LocalDensity.current.fontScale > 1.15f
+    val channelIds = remember(channels) { channels.map { it.id } }
+    val cardFocusRequesters = remember(channelIds) {
+        List(channelIds.size) { FocusRequester() }
+    }
+    var focusedCardId by remember(channelIds) {
+        mutableStateOf(uiState.selectedChannelId.takeIf { it in channelIds } ?: channelIds.firstOrNull())
+    }
+    val listState = rememberLazyListState()
+    LaunchedEffect(uiState.restoreChannelFocus, channelIds) {
+        if (uiState.restoreChannelFocus && channels.isNotEmpty()) {
+            val index = channelIds.indexOf(uiState.selectedChannelId).coerceAtLeast(0)
+            focusedCardId = channelIds[index]
+            listState.scrollToItem(index)
+            // Off-screen cards must be composed and attached before requesting focus.
+            withFrameNanos { }
+            cardFocusRequesters[index].requestFocus()
+            onAction(HomeAction.ChannelFocusRestored)
+        }
     }
 
     LazyRow(
+        state = listState,
         modifier = Modifier
             .fillMaxWidth()
-            .height(145.dp)
-        .focusGroup(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .height(148.dp)
+            .focusGroup(),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         itemsIndexed(channels, key = { _, item -> item.id }) { index, item ->
             val presentation = uiState.presentation(item)
             TellyoFocusableSurface(
                 modifier = Modifier
-                    .width(205.dp)
+                    .width(208.dp)
                     .fillMaxHeight()
+                    .then(if (item.id == focusedCardId) Modifier.focusRequester(firstFocus) else Modifier)
+                    .semantics { selected = item.id == uiState.focusedFavoriteId }
                     .focusProperties {
-                        up = playerButtonFocus
+                        up = heroFocus
                         down = epgFocus
-                        left = when (index) {
-                            0 -> navigationFocus
-                            1 -> firstFocus
-                            else -> cardFocusRequesters[index - 1]
-                        }
-                        if (index < channels.lastIndex) {
-                            right = cardFocusRequesters[index + 1]
-                        }
+                        // LazyRow's focus search composes and scrolls off-screen
+                        // cards. Explicit neighbour requesters may be unattached.
+                        if (index == 0) left = navigationFocus
                     },
                 shape = RoundedCornerShape(12.dp),
                 selected = item.id == uiState.focusedFavoriteId,
-                focusRequester = if (index == 0) firstFocus else cardFocusRequesters[index],
+                focusStyle = TellyoFocusStyles.Channel,
+                focusRequester = cardFocusRequesters[index],
                 contentDescription = "${item.name}, ${presentation.displayProgram?.title ?: "Programové údaje nie sú dostupné"}",
+                onFocusChanged = { focused ->
+                    if (focused) {
+                        focusedCardId = item.id
+                        onAction(HomeAction.FocusFavorite(item.id))
+                    }
+                },
                 onClick = { onAction(HomeAction.PlayChannel(item.id)) },
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 15.dp, vertical = 9.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.End,
                     ) {
-                        ChannelLogo(channelLogoKey(item), textSize = 36.sp)
-                        if (presentation.currentProgram != null) {
-                            Box(
-                                modifier = Modifier
-                                    .background(TellyoColors.PrimaryBlueDark, RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 5.dp, vertical = 3.dp),
-                            ) {
-                                Text(
-                                    text = "LIVE",
-                                    color = TellyoColors.TextPrimary,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
+                        ChannelLogo(
+                            channelLogoKey(item),
+                            textSize = 28.sp,
+                            logoUrl = item.logoUrl,
+                        )
                     }
                     Text(
                         text = item.name,
                         color = TellyoColors.TextPrimary,
-                        fontSize = 16.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = presentation.displayProgram?.title ?: "Programové údaje nie sú dostupné",
-                        color = TellyoColors.TextSecondary,
-                        fontSize = 14.sp,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
+                        text = presentation.displayProgram?.title ?: "Program nie je dostupný",
+                        color = TellyoColors.TextSecondary,
+                        fontSize = 18.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (!largeText) Text(
                         text = formatProgramRange(presentation.displayProgram),
                         color = TellyoColors.TextSecondary,
                         fontSize = 13.sp,
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    TellyoProgressBar(
-                        progress = programProgress(presentation.currentProgram),
+                    if (presentation.currentProgram != null) TellyoProgressBar(
+                        progress = programProgress(presentation.currentProgram, uiState.now),
                         modifier = Modifier.fillMaxWidth(),
                         height = 3.dp,
                     )
@@ -781,214 +745,98 @@ private fun FavoriteChannels(
 @Composable
 private fun EpgPreview(
     uiState: HomeUiState,
+    modifier: Modifier = Modifier,
     firstProgramFocus: FocusRequester,
     favoriteFocus: FocusRequester,
     navigationFocus: FocusRequester,
     onAction: (HomeAction) -> Unit,
 ) {
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(296.dp),
-    ) {
-        val channelColumn = 171.dp
-        val chevronColumn = 34.dp
-        val timelineWidth = maxWidth - channelColumn - chevronColumn
-        val now = Instant.now()
-        val windowStart = now.truncatedTo(ChronoUnit.HOURS).minus(Duration.ofHours(1))
-        val windowHours = 6f
-        val markerFraction = (Duration.between(windowStart, now).toMinutes() / 60f / windowHours)
-            .coerceIn(0f, 1f)
-        val markerX = channelColumn + timelineWidth * markerFraction
+    val channel = uiState.channels.firstOrNull { it.id == uiState.selectedChannelId }
+        ?: uiState.channels.firstOrNull()
+    val now = uiState.now
+    val programs = channel?.let { uiState.presentation(it, now).programs }
+        .orEmpty().filter { it.end > now }
+    val listState = rememberLazyListState()
+    LaunchedEffect(channel?.id) { listState.scrollToItem(0) }
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            Box(
-                modifier = Modifier.fillMaxWidth().height(31.dp),
-            ) {
-                Text(
-                    text = formatDateTime(windowStart),
-                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp),
-                    color = TellyoColors.TextSecondary,
-                    fontSize = 14.sp,
-                )
-                Row(
-                    modifier = Modifier
-                        .offset(x = channelColumn)
-                        .width(timelineWidth)
-                        .fillMaxHeight(),
-                    verticalAlignment = Alignment.CenterVertically,
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(text = formatDateTime(now), color = TellyoColors.TextSecondary, fontSize = 18.sp)
+            Spacer(modifier = Modifier.weight(1f))
+            Text(text = "Teraz a nasleduje", color = TellyoColors.TextSecondary, fontSize = 18.sp)
+        }
+        Row(modifier = Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            channel?.let {
+                Column(
+                    modifier = Modifier.width(171.dp).fillMaxHeight()
+                        .background(TellyoColors.SurfacePrimary, RoundedCornerShape(12.dp))
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    (0 until windowHours.toInt()).forEach { hourOffset ->
-                        Text(
-                            text = formatTime(windowStart.plus(Duration.ofHours(hourOffset.toLong()))),
-                            modifier = Modifier.weight(1f),
-                            color = TellyoColors.TextSecondary,
-                            fontSize = 14.sp,
-                        )
-                    }
+                    ChannelLogo(channelLogoKey(it), logoUrl = it.logoUrl,
+                        modifier = Modifier.width(100.dp), textSize = 54.sp)
+                    Text(text = it.shortName, color = TellyoColors.TextPrimary,
+                        fontSize = 22.sp, fontWeight = FontWeight.Medium)
                 }
-                Text(
-                    text = formatTime(now),
-                    modifier = Modifier.offset(x = markerX - 22.dp),
-                    color = TellyoColors.PrimaryBlueBright,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
             }
-
-            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    uiState.channels.take(5).forEachIndexed { rowIndex, channel ->
-                        EpgRow(
-                            channel = channel,
-                            programs = uiState.presentation(channel, now).programs,
-                            rowIndex = rowIndex,
-                            channelColumn = channelColumn,
-                            chevronColumn = chevronColumn,
-                            timelineWidth = timelineWidth,
-                            windowStart = windowStart,
-                            windowMinutes = windowHours * 60f,
-                            now = now,
-                            firstProgramFocus = firstProgramFocus,
-                            favoriteFocus = favoriteFocus,
-                            navigationFocus = navigationFocus,
-                            onAction = onAction,
-                        )
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(2.dp)
-                        .offset(x = markerX)
-                        .background(TellyoColors.PrimaryBlueBright)
-                        .zIndex(2f),
+            if (programs.isEmpty()) Column(
+                modifier = Modifier.weight(1f).fillMaxHeight()
+                    .background(TellyoColors.SurfacePrimary, RoundedCornerShape(12.dp)).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
+            ) {
+                Text(text = "Programové údaje nie sú dostupné", color = TellyoColors.TextSecondary, fontSize = 22.sp)
+                TellyoButton(
+                    text = "Celý program",
+                    focusRequester = firstProgramFocus,
+                    modifier = Modifier.focusProperties { up = favoriteFocus; left = navigationFocus },
+                    onClick = { onAction(HomeAction.SelectDestination(NavigationDestination.GUIDE)) },
                 )
-                Box(
-                    modifier = Modifier
-                        .size(9.dp)
-                        .offset(x = markerX - 3.5.dp, y = (-4).dp)
-                        .background(TellyoColors.PrimaryBlueBright, RoundedCornerShape(50))
-                        .zIndex(3f),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun EpgRow(
-    channel: Channel,
-    programs: List<Program>,
-    rowIndex: Int,
-    channelColumn: Dp,
-    chevronColumn: Dp,
-    timelineWidth: Dp,
-    windowStart: Instant,
-    windowMinutes: Float,
-    now: Instant,
-    firstProgramFocus: FocusRequester,
-    favoriteFocus: FocusRequester,
-    navigationFocus: FocusRequester,
-    onAction: (HomeAction) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().height(50.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            modifier = Modifier
-                .width(channelColumn)
-                .fillMaxHeight()
-                .background(TellyoColors.SurfacePrimary, RoundedCornerShape(8.dp))
-                .border(1.dp, TellyoColors.Divider, RoundedCornerShape(8.dp))
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(13.dp),
-        ) {
-            ChannelLogo(
-                logoKey = channelLogoKey(channel),
-                modifier = Modifier.width(55.dp),
-                textSize = 31.sp,
-            )
-            Text(
-                text = channel.shortName,
-                color = TellyoColors.TextPrimary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-            )
-        }
-        Box(modifier = Modifier.weight(1f).fillMaxHeight().focusGroup()) {
-            programs.forEachIndexed { programIndex, program ->
-                val startMinutes = Duration.between(windowStart, program.start).toMinutes().toFloat()
-                val endMinutes = Duration.between(windowStart, program.end).toMinutes().toFloat()
-                val visibleStart = startMinutes.coerceAtLeast(0f)
-                val visibleEnd = endMinutes.coerceAtMost(windowMinutes)
-                if (visibleEnd > visibleStart) {
-                    val x = (visibleStart / windowMinutes).coerceIn(0f, 1f)
-                    val width = ((visibleEnd - visibleStart) / windowMinutes).coerceIn(0f, 1f)
+            } else LazyRow(
+                state = listState,
+                modifier = Modifier.weight(1f).fillMaxHeight().focusGroup(),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                itemsIndexed(programs, key = { _, program -> program.id }) { index, program ->
                     val isCurrent = program.start <= now && program.end.isAfter(now)
                     TellyoFocusableSurface(
-                        modifier = Modifier
-                            .offset(x = timelineWidth * x)
-                            .width(timelineWidth * width)
-                            .fillMaxHeight()
-                            .padding(horizontal = 1.dp)
-                            .focusProperties {
-                                if (rowIndex == 0 && programIndex == 0) {
-                                    up = favoriteFocus
-                                    left = navigationFocus
-                                }
-                            },
-                        shape = RoundedCornerShape(6.dp),
-                        selected = isCurrent,
-                        focusRequester = if (rowIndex == 0 && programIndex == 0) firstProgramFocus else null,
-                        contentDescription = "${channel.name}: ${program.title}",
-                        focusStyle = if (isCurrent) {
-                            TellyoFocusStyles.FilledSelection
-                        } else {
-                            TellyoFocusStyles.Standard
+                        modifier = Modifier.width(320.dp).fillMaxHeight().focusProperties {
+                            up = favoriteFocus
+                            if (index == 0) left = navigationFocus
                         },
+                        shape = RoundedCornerShape(12.dp),
+                        selected = isCurrent,
+                        focusRequester = if (index == 0) firstProgramFocus else null,
+                        contentDescription = "${channel?.name}: ${program.title}",
+                        focusStyle = if (isCurrent) TellyoFocusStyles.FilledSelection else TellyoFocusStyles.Standard,
                         onClick = { onAction(HomeAction.SelectDestination(NavigationDestination.GUIDE)) },
                     ) {
-                        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 3.dp)) {
-                            Text(
-                                text = formatProgramRange(program),
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(text = formatProgramRange(program), color = TellyoColors.TextSecondary,
+                                    fontSize = 16.sp, lineHeight = 20.sp)
+                                if (isCurrent) LiveBadge()
+                            }
+                            Text(text = program.title, color = TellyoColors.TextPrimary, fontSize = 24.sp,
+                                lineHeight = 30.sp, fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Medium,
+                                maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            if (!program.description.isNullOrBlank()) Text(
+                                text = program.description, modifier = Modifier.weight(1f, fill = false),
                                 color = TellyoColors.TextSecondary,
-                                fontSize = 11.sp,
-                                lineHeight = 12.sp,
-                                maxLines = 1,
-                            )
-                            Text(
-                                text = program.title,
-                                color = TellyoColors.TextPrimary,
-                                fontSize = 15.sp,
-                                lineHeight = 17.sp,
-                                fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
-                                maxLines = 1,
+                                fontSize = 18.sp, lineHeight = 24.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
                 }
             }
         }
-        Box(
-            modifier = Modifier
-                .width(chevronColumn)
-                .fillMaxHeight()
-                .background(TellyoColors.SurfacePrimary, RoundedCornerShape(8.dp))
-                .border(1.dp, TellyoColors.Divider, RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            TellyoIcon(
-                icon = TellyoIconType.CHEVRON_RIGHT,
-                modifier = Modifier.size(22.dp),
-                tint = TellyoColors.TextMuted,
-            )
-        }
     }
 }
-
 @Composable
 private fun DestinationPlaceholder(
     destination: NavigationDestination,

@@ -6,13 +6,13 @@ import com.tellyo.app.core.epg.EpgRepository
 import com.tellyo.app.core.model.Channel
 import com.tellyo.app.core.model.Program
 import com.tellyo.app.core.provider.ChannelRepository
+import com.tellyo.app.core.time.AppClock
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,6 +49,7 @@ sealed interface GuideAction {
 class GuideViewModel @Inject constructor(
     private val channelRepository: ChannelRepository,
     private val epgRepository: EpgRepository,
+    private val clock: AppClock = AppClock(),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(GuideUiState())
     val uiState: StateFlow<GuideUiState> = _uiState.asStateFlow()
@@ -58,7 +59,11 @@ class GuideViewModel @Inject constructor(
     private var guideChannels: List<Channel> = emptyList()
 
     init {
-        refreshAndObserve()
+        viewModelScope.launch {
+            clock.now.collect { now -> _uiState.update { it.copy(now = now) } }
+        }
+        // Read cached programmes immediately; HomeViewModel owns periodic refreshes.
+        observeWindow()
     }
 
     fun onAction(action: GuideAction) {
@@ -75,25 +80,21 @@ class GuideViewModel @Inject constructor(
             is GuideAction.ShiftWindow -> _uiState.update {
                 it.copy(
                     windowStart = it.windowStart.plus(Duration.ofHours(action.hours)),
-                    now = Instant.now(),
+                    now = clock.now.value,
                     selectedProgram = null,
                 )
             }.also { observeWindow() }
             GuideAction.DismissProgram -> _uiState.update { it.copy(selectedProgram = null) }
-            GuideAction.Refresh -> refreshAndObserve()
+            GuideAction.Refresh -> refresh()
         }
     }
 
-    private fun refreshAndObserve() {
+    private fun refresh() {
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true, error = null) }
             refreshEpg()
-            observeWindow()
-            while (true) {
-                delay(EPG_REFRESH_INTERVAL_MILLIS)
-                refreshEpg()
-            }
+            _uiState.update { it.copy(isRefreshing = false) }
         }
     }
 
@@ -111,10 +112,17 @@ class GuideViewModel @Inject constructor(
     private fun observeWindow() {
         observationJob?.cancel()
         observationJob = viewModelScope.launch {
-            if (guideChannels.isEmpty()) {
-                guideChannels = channelRepository.getChannels()
-                    .filter { it.enabled }
-                    .sortedBy { it.number }
+            try {
+                if (guideChannels.isEmpty()) {
+                    guideChannels = channelRepository.getChannels()
+                        .filter { it.enabled }
+                        .sortedBy { it.number }
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _uiState.update { it.copy(isRefreshing = false, error = error.message ?: "Channels unavailable") }
+                return@launch
             }
 
             val windowStart = _uiState.value.windowStart
@@ -122,24 +130,20 @@ class GuideViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     rows = guideChannels.map { channel -> GuideRowState(channel) },
-                    isRefreshing = true,
+                    isRefreshing = refreshJob?.isActive == true,
                 )
             }
 
-            guideChannels.forEach { channel ->
-                launch {
-                    epgRepository.observePrograms(channel.id, windowStart, windowEnd).collect { programs ->
-                        _uiState.update { state ->
-                            state.copy(
-                                rows = state.rows.map { row ->
-                                    if (row.channel.id == channel.id) row.copy(programs = programs) else row
-                                },
-                                isRefreshing = false,
-                            )
-                        }
+            epgRepository.observePrograms(guideChannels.map(Channel::id), windowStart, windowEnd)
+                .collect { programs ->
+                    _uiState.update { state ->
+                        state.copy(
+                            rows = guideChannels.map { channel ->
+                                GuideRowState(channel, programs[channel.id].orEmpty())
+                            },
+                        )
                     }
                 }
-            }
         }
     }
 
@@ -147,5 +151,3 @@ class GuideViewModel @Inject constructor(
 
 private fun initialWindowStart(): Instant =
     Instant.now().truncatedTo(ChronoUnit.HOURS).minus(Duration.ofHours(1))
-
-private const val EPG_REFRESH_INTERVAL_MILLIS = 60_000L

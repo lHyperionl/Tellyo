@@ -15,8 +15,20 @@ import java.time.Instant
 class StvrTvProviderInstrumentedTest {
     @Test
     fun providerUsesPlayableOfficialSourceBoundary() = runTest {
-        val channel = StvrTvProvider.channels.first()
-        val result = StvrTvProvider(FakeStvrOfficialApi()).resolveStream(channel)
+        val channel = com.tellyo.app.core.model.Channel(
+            id = StvrTvProvider.JEDNOTKA_ID,
+            number = 1,
+            name = "Jednotka",
+            shortName = "Jednotka",
+            logoUrl = null,
+            providerId = StvrTvProvider.PROVIDER_ID,
+            category = com.tellyo.app.core.model.ChannelCategory.GENERAL,
+            enabled = true,
+        )
+        val result = StvrTvProvider(
+            FakeStvrOfficialApi(),
+            InMemoryChannelCatalogRepository(listOf(channel)),
+        ).resolveStream(channel)
 
         assertTrue(result is StreamResolution.Playable)
         result as StreamResolution.Playable

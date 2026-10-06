@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +30,7 @@ import com.tellyo.app.core.network.NetworkStatus
 import com.tellyo.app.core.player.PlaybackState
 import com.tellyo.app.core.ui.components.SectionHeading
 import com.tellyo.app.core.ui.components.TellyoButton
+import com.tellyo.app.core.ui.components.TellyoFocusableSurface
 import com.tellyo.app.core.ui.components.TellyoIcon as TellyoIconType
 import com.tellyo.app.core.ui.theme.TellyoColors
 import java.time.ZoneId
@@ -50,7 +53,7 @@ fun DiagnosticsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(top = 18.dp, start = 8.dp, end = 10.dp, bottom = 18.dp),
+            .padding(top = 8.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text(
@@ -94,9 +97,40 @@ fun DiagnosticsScreen(
             )
         }
 
+        SectionHeading(text = "Aktuálny stream")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TelemetryCard("Protokol", state.playbackTelemetry.protocol ?: "-", Modifier.weight(1f))
+            TelemetryCard(
+                "Rozlíšenie",
+                state.playbackTelemetry.resolutionLabel(),
+                Modifier.weight(1f),
+            )
+            TelemetryCard(
+                "Bitrate",
+                state.playbackTelemetry.effectiveBitrate.bitrateLabel(),
+                Modifier.weight(1f),
+            )
+            TelemetryCard(
+                "Vynechané snímky",
+                state.playbackTelemetry.droppedFrames.toString(),
+                Modifier.weight(1f),
+            )
+            TelemetryCard(
+                "Buffer",
+                state.playbackTelemetry.bufferDurationMillis.secondsLabel(),
+                Modifier.weight(1f),
+            )
+            TelemetryCard(
+                "Live offset",
+                state.playbackTelemetry.liveOffsetMillis.secondsLabel(),
+                Modifier.weight(1f),
+            )
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TellyoButton(
                 text = if (state.isCheckingChannels) "Testujem kanály…" else "Otestovať kanály",
+                enabled = !state.isCheckingChannels,
                 icon = TellyoIconType.SIGNAL,
                 focusRequester = checkFocus,
                 modifier = Modifier
@@ -106,6 +140,7 @@ fun DiagnosticsScreen(
             )
             TellyoButton(
                 text = "Obnoviť EPG",
+                enabled = state.epgStatus != EpgRefreshStatus.Refreshing,
                 icon = TellyoIconType.GUIDE,
                 focusRequester = epgFocus,
                 modifier = Modifier
@@ -116,22 +151,53 @@ fun DiagnosticsScreen(
         }
 
         SectionHeading(text = "Stav kanálov")
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            state.channelHealth.forEach { health ->
-                ChannelHealthRow(health)
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            items(state.channelHealth, key = { it.channel.id }) { health ->
+                TellyoFocusableSurface(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentDescription = "${health.channel.name}: ${health.status}",
+                ) { ChannelHealthRow(health) }
             }
             if (state.channelHealth.isEmpty()) {
-                Text(
-                    text = "Kanály sa ešte načítavajú…",
-                    color = TellyoColors.TextSecondary,
-                    fontSize = 16.sp,
-                )
+                item {
+                    Text(
+                        text = "Kanály sa ešte načítavajú…",
+                        color = TellyoColors.TextSecondary,
+                        fontSize = 16.sp,
+                    )
+                }
             }
         }
 
         state.epgDetail?.let { detail ->
             Text(text = detail, color = TellyoColors.Live, fontSize = 14.sp)
         }
+    }
+}
+
+@Composable
+private fun TelemetryCard(
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .background(TellyoColors.SurfacePrimary, RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Text(text = title, color = TellyoColors.TextSecondary, fontSize = 11.sp, maxLines = 1)
+        Text(
+            text = value,
+            color = TellyoColors.PrimaryBlueBright,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
     }
 }
 
@@ -192,6 +258,7 @@ private fun playbackLabel(state: PlaybackState): String = when (state) {
     is PlaybackState.Playing -> "Prehráva sa"
     is PlaybackState.Paused -> "Pozastavené"
     PlaybackState.Retrying -> "Opakujem"
+    is PlaybackState.OfficialEmbed -> "Oficiálny prehrávač"
     is PlaybackState.External -> "Externý zdroj"
     is PlaybackState.Unavailable -> "Nedostupné"
     is PlaybackState.Error -> "Chyba"
@@ -205,3 +272,14 @@ private fun epgLabel(state: DiagnosticsUiState): String = when (state.epgStatus)
     } ?: "Aktuálne"
     EpgRefreshStatus.Failed -> "Chyba"
 }
+
+private fun com.tellyo.app.core.player.PlaybackTelemetry.resolutionLabel(): String =
+    if (videoWidth != null && videoHeight != null) "${videoWidth}×${videoHeight}" else "-"
+
+private fun Long?.bitrateLabel(): String = this?.let { bitrate ->
+    String.format(java.util.Locale.ROOT, "%.1f Mbps", bitrate / 1_000_000.0)
+} ?: "-"
+
+private fun Long?.secondsLabel(): String = this?.let { millis ->
+    String.format(java.util.Locale.ROOT, "%.1f s", millis / 1_000.0)
+} ?: "-"

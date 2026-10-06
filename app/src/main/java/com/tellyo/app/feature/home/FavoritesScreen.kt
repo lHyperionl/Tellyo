@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -46,18 +47,18 @@ fun FavoritesScreen(
     val orderedChannels = remember(channels, favoriteSettings) {
         channels.orderedForManagement(favoriteSettings)
     }
-    val rowFocusRequesters = remember(orderedChannels.map(Channel::id)) {
-        List(orderedChannels.size) { FocusRequester() }
-    }
-
-    LaunchedEffect(orderedChannels, autoFocusContent) {
-        if (autoFocusContent) entryFocus.requestFocus()
+    LaunchedEffect(orderedChannels.isNotEmpty(), autoFocusContent) {
+        if (autoFocusContent && orderedChannels.isNotEmpty()) {
+            // Lazy rows attach their focus targets during the first layout pass.
+            withFrameNanos { }
+            entryFocus.requestFocus()
+        }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(top = 18.dp, start = 8.dp, end = 10.dp, bottom = 18.dp),
+            .padding(top = 8.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
@@ -87,14 +88,13 @@ fun FavoritesScreen(
                         .height(65.dp)
                         .focusProperties {
                             left = navigationFocus
-                            if (index > 0) up = rowFocusRequesters[index - 1]
-                            if (index < orderedChannels.lastIndex) down = rowFocusRequesters[index + 1]
+                            if (index == 1) up = entryFocus
                         },
+                    focusRequester = if (index == 0) entryFocus else null,
                     shape = RoundedCornerShape(10.dp),
                     // Membership is communicated by the right-hand status;
                     // reserve the blue border for the one remotely focused row.
                     selected = false,
-                    focusRequester = if (index == 0) entryFocus else rowFocusRequesters[index],
                     contentDescription = "${channel.name}: ${if (isFavorite) "v obľúbených" else "nie je v obľúbených"}",
                     focusStyle = TellyoFocusStyles.Standard,
                     onKeyInput = { key, type ->
@@ -122,7 +122,11 @@ fun FavoritesScreen(
                             .padding(horizontal = 18.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        ChannelLogo(logoKey = channelLogoKey(channel), textSize = 32.sp)
+                        ChannelLogo(
+                            logoKey = channelLogoKey(channel),
+                            logoUrl = channel.logoUrl,
+                            textSize = 32.sp,
+                        )
                         Spacer(modifier = Modifier.width(18.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
