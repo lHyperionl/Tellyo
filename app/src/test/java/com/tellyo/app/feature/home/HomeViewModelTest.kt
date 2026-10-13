@@ -364,6 +364,26 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun settingsReadStartsWhileChannelCatalogIsStillLoading() {
+        val channelGate = CompletableDeferred<Unit>()
+        val settings = FakeSettingsRepository("joj")
+        settings.readGate = CompletableDeferred()
+        val channels = FakeChannelRepository(loadGate = channelGate)
+        val model = createViewModel(settings = settings, channels = channels)
+        assertTrue(settings.readStarted)
+        assertTrue(model.uiState.value.isLoading)
+        settings.readGate?.complete(Unit)
+        assertTrue(model.uiState.value.channels.isEmpty())
+        assertTrue(channels.resolvedChannelIds.isEmpty())
+
+        channelGate.complete(Unit)
+        assertFalse(model.uiState.value.isLoading)
+        assertEquals("joj", model.uiState.value.selectedChannelId)
+        assertTrue(model.uiState.value.playerVisible)
+        assertEquals(listOf("joj"), channels.resolvedChannelIds)
+    }
+
+    @Test
     fun delayedSettingsLoadRestoresOnlyAfterChannelsAreReady() {
         val settings = FakeSettingsRepository("joj")
         settings.readGate = CompletableDeferred()
@@ -483,13 +503,17 @@ class HomeViewModelTest {
 
     private class FakeChannelRepository(
         private val channels: List<Channel> = PreviewTvProvider.previewChannels,
+        private val loadGate: CompletableDeferred<Unit>? = null,
         private val resolve: suspend (Channel) -> StreamResolution = {
             StreamResolution.OfficialEmbed("https://example.com/${it.id}")
         },
     ) : ChannelRepository {
         val resolvedChannelIds = mutableListOf<String>()
 
-        override suspend fun getChannels() = channels
+        override suspend fun getChannels(): List<Channel> {
+            loadGate?.await()
+            return channels
+        }
 
         override suspend fun resolveStream(channel: Channel): StreamResolution {
             resolvedChannelIds += channel.id
@@ -501,9 +525,11 @@ class HomeViewModelTest {
         val state = MutableStateFlow(TellyoSettings(lastChannelId = lastChannelId))
         val writtenChannelIds = mutableListOf<String>()
         var readGate: CompletableDeferred<Unit>? = null
+        var readStarted = false
         var readFailure: IOException? = null
         var writeFailure: IOException? = null
         override val settings = flow {
+            readStarted = true
             readGate?.await()
             readFailure?.let { throw it }
             emitAll(state)
@@ -518,6 +544,7 @@ class HomeViewModelTest {
         override suspend fun setReduceMotion(enabled: Boolean) = Unit
 
         override suspend fun setVideoQuality(preference: VideoQualityPreference) = Unit
+        override suspend fun setBlockEmbedAds(enabled: Boolean) = Unit
     }
 
     private class FakeEpgRepository : EpgRepository {

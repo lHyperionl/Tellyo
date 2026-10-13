@@ -79,7 +79,7 @@ class CzechIptvProviderTest {
         })
         val czechProvider = provider(bundled("czech-iptv.m3u", CzechIptvProvider.PROVIDER_ID), slovak)
         val repository = DefaultChannelRepository(
-            ProviderRegistry(mapOf(slovakProvider.id to slovakProvider, czechProvider.id to czechProvider)),
+            dagger.Lazy { ProviderRegistry(mapOf(slovakProvider.id to slovakProvider, czechProvider.id to czechProvider)) },
             InMemoryChannelCatalogRepository(emptyList()),
         )
         val channels = repository.getChannels()

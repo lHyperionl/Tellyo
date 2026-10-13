@@ -341,6 +341,11 @@ private fun TellyoPlayerControls(
                     modifier = Modifier.fillMaxWidth(),
                     height = 5.dp,
                 )
+                Text(
+                    text = "↑ ↓ Výber kanála · OK Prepnúť · Späť Zavrieť",
+                    color = TellyoColors.TextSecondary,
+                    fontSize = 13.sp,
+                )
                 notice?.let {
                     Text(text = it, color = TellyoColors.TextSecondary, fontSize = 13.sp)
                 }

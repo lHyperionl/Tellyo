@@ -13,6 +13,19 @@ fun String.asBuildConfigString(): String = "\"" +
 val tellyoConfigBaseUrl = providers.gradleProperty("tellyoConfigBaseUrl")
     .orElse(providers.environmentVariable("TELLYO_CONFIG_BASE_URL"))
     .getOrElse("")
+val tellyoUpdateRepository = providers.gradleProperty("tellyoUpdateRepository")
+    .orElse(providers.environmentVariable("TELLYO_UPDATE_REPOSITORY"))
+    .getOrElse("lHyperionl/Tellyo")
+require(tellyoUpdateRepository.matches(Regex("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"))) {
+    "TELLYO_UPDATE_REPOSITORY must be owner/repository"
+}
+val tellyoVersionCode = providers.gradleProperty("tellyoVersionCode")
+    .orElse(providers.environmentVariable("TELLYO_VERSION_CODE"))
+    .getOrElse("1").toInt()
+require(tellyoVersionCode in 1..2_100_000_000)
+val tellyoVersionName = providers.gradleProperty("tellyoVersionName")
+    .orElse(providers.environmentVariable("TELLYO_VERSION_NAME"))
+    .getOrElse("0.1.0")
 val releaseKeystorePath = providers.environmentVariable("TELLYO_KEYSTORE_PATH").orNull
 val releaseKeystorePassword = providers.environmentVariable("TELLYO_KEYSTORE_PASSWORD").orNull
 val releaseKeyAlias = providers.environmentVariable("TELLYO_KEY_ALIAS").orNull
@@ -32,10 +45,11 @@ android {
         applicationId = "com.tellyo.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = tellyoVersionCode
+        versionName = tellyoVersionName
 
         buildConfigField("String", "TELLYO_CONFIG_BASE_URL", tellyoConfigBaseUrl.asBuildConfigString())
+        buildConfigField("String", "TELLYO_UPDATE_REPOSITORY", tellyoUpdateRepository.asBuildConfigString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

@@ -126,7 +126,7 @@ class XmlTvParser @javax.inject.Inject constructor() {
 @javax.inject.Singleton
 class RoomEpgRepository @javax.inject.Inject constructor(
     private val programDao: com.tellyo.app.core.database.ProgramDao,
-    private val providers: Set<@JvmSuppressWildcards EpgProvider>,
+    private val providers: dagger.Lazy<Set<@JvmSuppressWildcards EpgProvider>>,
     private val parser: XmlTvParser,
 ) : EpgRepository {
     private val refreshMutex = kotlinx.coroutines.sync.Mutex()
@@ -162,7 +162,7 @@ class RoomEpgRepository @javax.inject.Inject constructor(
         val failures = mutableListOf<Throwable>()
         // Resolve higher-priority coverage first, including coverage retained while
         // its source is throttled or temporarily unavailable.
-        val orderedProviders = providers.sortedByDescending(EpgProvider::priority)
+        val orderedProviders = providers.get().sortedByDescending(EpgProvider::priority)
         orderedProviders.forEach { provider ->
             val lastRefresh = lastSuccessfulRefresh[provider.id]
             if (lastRefresh != null &&

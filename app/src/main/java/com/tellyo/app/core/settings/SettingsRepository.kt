@@ -18,6 +18,7 @@ data class TellyoSettings(
     val lastChannelId: String? = null,
     val reduceMotion: Boolean = false,
     val videoQuality: VideoQualityPreference = VideoQualityPreference.AUTO,
+    val blockEmbedAds: Boolean = true,
 )
 
 interface SettingsRepository {
@@ -28,6 +29,8 @@ interface SettingsRepository {
     suspend fun setReduceMotion(enabled: Boolean)
 
     suspend fun setVideoQuality(preference: VideoQualityPreference)
+
+    suspend fun setBlockEmbedAds(enabled: Boolean)
 }
 
 private val Context.tellyoSettingsDataStore by preferencesDataStore(name = "tellyo_settings")
@@ -43,6 +46,7 @@ class DataStoreSettingsRepository @Inject constructor(
             TellyoSettings(
                 lastChannelId = preferences[Keys.lastChannelId],
                 reduceMotion = preferences[Keys.reduceMotion] ?: false,
+                blockEmbedAds = preferences[Keys.blockEmbedAds] ?: true,
                 videoQuality = preferences[Keys.videoQuality]
                     ?.let { raw -> runCatching { VideoQualityPreference.valueOf(raw) }.getOrNull() }
                     ?: VideoQualityPreference.AUTO,
@@ -61,9 +65,14 @@ class DataStoreSettingsRepository @Inject constructor(
         context.tellyoSettingsDataStore.edit { it[Keys.videoQuality] = preference.name }
     }
 
+    override suspend fun setBlockEmbedAds(enabled: Boolean) {
+        context.tellyoSettingsDataStore.edit { it[Keys.blockEmbedAds] = enabled }
+    }
+
     private object Keys {
         val lastChannelId = stringPreferencesKey("last_channel_id")
         val reduceMotion = booleanPreferencesKey("reduce_motion")
+        val blockEmbedAds = booleanPreferencesKey("block_embed_ads")
         val videoQuality = stringPreferencesKey("video_quality")
     }
 }

@@ -73,3 +73,29 @@ Successful route or account-screen checks do not prove authenticated playback.
 JOJ/Plus and the four Premium channels need a viewer account before their
 live video/audio can be verified. Build, unit tests and Android lint are also
 part of validation.
+
+## Startup retry improvement (7 October 2026)
+
+The JOJ/Plus/Krimi page adapter now retries the official Play control every
+second, with a 250 ms readiness check, instead of waiting five seconds between
+attempts. It also reacts to changes in the control's title and disabled state.
+Retries end after 30 seconds from the first attempt, when media accepts a play
+request (including buffering or pre-roll), at an account gate, or after viewer
+interaction. Hidden/disabled controls, consent dialogs and background pages
+prevent automatic Play requests. JOJ 24 retains its official embed autoplay.
+
+Run the deterministic adapter regressions with:
+
+```powershell
+node --test scripts/test-joj-startup.mjs
+```
+
+All 11 checks passed. A fixture whose player setup finishes at 2.1 seconds
+starts at 3 seconds; the former retry schedule would wait until 5 seconds.
+This measures adapter scheduling, not live network or broadcaster startup.
+No Android device was connected for live timing validation. Android build,
+unit-test and lint attempts encountered a local Gradle/JDK loopback connection
+failure before any tasks ran. The earlier live-player results above predate
+this change; repeat them on a connected device before claiming a measured
+end-to-end improvement. Broadcaster page loading, source setup, account access,
+advertising and media buffering still contribute to total startup time.

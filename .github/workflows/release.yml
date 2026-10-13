@@ -3,14 +3,20 @@ name: Signed Android release
 on:
   workflow_dispatch:
   push:
+    branches: [ main, master ]
     tags:
       - 'v*'
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: tellyo-public-release
+  cancel-in-progress: false
 
 jobs:
   release:
+    if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/') || github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
 
     steps:
@@ -26,6 +32,30 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Set release version
+        shell: bash
+        env:
+          SOURCE_REF: ${{ github.ref }}
+          SOURCE_REF_NAME: ${{ github.ref_name }}
+        run: |
+          # One monotonically increasing code per workflow run, including tag builds.
+          version_code=$((1000 + GITHUB_RUN_NUMBER))
+          if [[ "$SOURCE_REF" == refs/tags/v* ]]; then
+            version_name="${SOURCE_REF_NAME#v}"
+            release_tag="$SOURCE_REF_NAME"
+          else
+            version_name="0.1.$version_code"
+            release_tag="build-$version_code"
+          fi
+          if [[ ! "$version_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'Release tags must be stable versions such as v1.2.3.' >&2
+            exit 1
+          fi
+          echo "TELLYO_VERSION_CODE=$version_code" >> "$GITHUB_ENV"
+          echo "TELLYO_VERSION_NAME=$version_name" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+          echo "TELLYO_UPDATE_REPOSITORY=$GITHUB_REPOSITORY" >> "$GITHUB_ENV"
+
       - name: Validate release secrets
         shell: bash
         env:
@@ -34,10 +64,12 @@ jobs:
           KEY_ALIAS: ${{ secrets.TELLYO_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.TELLYO_KEY_PASSWORD }}
         run: |
-          test -n "$KEYSTORE_BASE64"
-          test -n "$KEYSTORE_PASSWORD"
-          test -n "$KEY_ALIAS"
-          test -n "$KEY_PASSWORD"
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing signing secret: $name. See docs/app-updates.md." >&2
+              exit 1
+            fi
+          done
 
       - name: Decode release keystore
         shell: bash
@@ -55,12 +87,29 @@ jobs:
           TELLYO_CONFIG_BASE_URL: ${{ vars.TELLYO_CONFIG_BASE_URL }}
         run: bash ./gradlew testReleaseUnitTest lintRelease assembleRelease bundleRelease --no-daemon
 
+      - name: Prepare update metadata
+        shell: bash
+        run: |
+          python3 -m unittest discover -s scripts -p test_update_release.py
+          python3 scripts/create-update-manifest.py app/build/outputs/apk/release artifacts/release
+
       - name: Upload signed release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tellyo-${{ github.ref_name }}
+          name: tellyo-${{ env.RELEASE_TAG }}
           if-no-files-found: error
           retention-days: 30
           path: |
-            app/build/outputs/apk/release/*.apk
+            artifacts/release/*
             app/build/outputs/bundle/release/*.aab
+
+      - name: Publish public release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish-update-release.py artifacts/release
+
+      - name: Remove temporary signing key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/tellyo-release.jks"

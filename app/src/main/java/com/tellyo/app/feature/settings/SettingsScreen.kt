@@ -43,6 +43,7 @@ fun SettingsScreen(
 ) {
     val motionFocus = entryFocus ?: remember { FocusRequester() }
     val qualityFocus = remember { FocusRequester() }
+    val adFilterFocus = remember { FocusRequester() }
     val resetFocus = remember { FocusRequester() }
 
     LaunchedEffect(autoFocusContent) {
@@ -86,7 +87,7 @@ fun SettingsScreen(
             focusRequester = qualityFocus,
             navigationFocus = navigationFocus,
             upFocus = motionFocus,
-            downFocus = resetFocus,
+            downFocus = adFilterFocus,
             onClick = { onAction(SettingsAction.CycleVideoQuality) },
         )
         SettingsInfoRow(
@@ -94,10 +95,15 @@ fun SettingsScreen(
             description = "Media3 / ExoPlayer",
             icon = TellyoIconType.PLAY,
         )
-        SettingsInfoRow(
-            title = "Oficiálne vysielania",
-            description = "Otvárajú sa cez oficiálnu stránku poskytovateľa.",
-            icon = TellyoIconType.INFO,
+        SettingsToggleRow(
+            title = "Blokovať reklamy v prehrávači",
+            description = "Blokuje reklamné požiadavky. Pri problémoch s prehrávaním vypnite.",
+            enabled = state.blockEmbedAds,
+            focusRequester = adFilterFocus,
+            navigationFocus = navigationFocus,
+            upFocus = qualityFocus,
+            downFocus = resetFocus,
+            onClick = { onAction(SettingsAction.ToggleBlockEmbedAds) },
         )
 
         SectionHeading(text = "Údržba")
@@ -109,7 +115,7 @@ fun SettingsScreen(
                 .width(280.dp)
                 .focusProperties {
                     left = navigationFocus
-                    up = qualityFocus
+                    up = adFilterFocus
                 },
             onClick = { onAction(SettingsAction.Reset) },
         )
@@ -179,6 +185,7 @@ private fun SettingsToggleRow(
     focusRequester: FocusRequester,
     navigationFocus: FocusRequester,
     downFocus: FocusRequester,
+    upFocus: FocusRequester? = null,
     onClick: () -> Unit,
 ) {
     TellyoFocusableSurface(
@@ -187,6 +194,7 @@ private fun SettingsToggleRow(
             .height(78.dp)
             .focusProperties {
                 left = navigationFocus
+                upFocus?.let { up = it }
                 down = downFocus
             },
         shape = RoundedCornerShape(12.dp),

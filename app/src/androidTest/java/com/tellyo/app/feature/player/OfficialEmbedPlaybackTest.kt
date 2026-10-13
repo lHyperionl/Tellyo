@@ -13,6 +13,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.tellyo.app.MainActivity
 import com.tellyo.app.core.player.PlaybackState
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.mutableStateOf
+import com.tellyo.app.core.provider.MarkizaTvProvider
+import com.tellyo.app.core.provider.JojTvProvider
 import com.tellyo.app.feature.home.HomeAction
 import com.tellyo.app.feature.home.HomeViewModel
 import java.io.File
@@ -29,6 +33,42 @@ import org.junit.runner.RunWith
 /** Opt-in real-player regression: no click, remote confirmation or touch starts playback. */
 @RunWith(AndroidJUnit4::class)
 class OfficialEmbedPlaybackTest {
+    @Test
+    fun filteredPrerollStillReachesLiveProgramme() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("filteredPreroll") == "true")
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        // Exercise the production embed independently of catalogue refresh and
+        // Android's validated-network gate; only page/video loading is under test.
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            lateinit var activity: MainActivity
+            val selectedUrl = mutableStateOf<String?>(null)
+            scenario.onActivity {
+                activity = it
+                it.setContent {
+                    selectedUrl.value?.let { url ->
+                        OfficialEmbedPlayerScreen(url, onBack = { selectedUrl.value = null }, blockAds = true)
+                    }
+                }
+            }
+            listOf(
+                "markiza" to MarkizaTvProvider.MARKIZA_EMBED_URL,
+                "markiza-doma" to MarkizaTvProvider.DOMA_EMBED_URL,
+                "joj-24" to JojTvProvider.NEWS_24_EMBED_URL,
+            ).forEach { (channel, url) ->
+                instrumentation.runOnMainSync { selectedUrl.value = url }
+                val start = System.currentTimeMillis()
+                val observation = waitForVideo(activity, requireLive = true, timeoutMs = 45_000)
+                android.util.Log.i("TellyoAdFilter", "$channel live after ${System.currentTimeMillis() - start}ms: $observation")
+                instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                assertTrue(waitUntil(5_000) {
+                    val view = AtomicReference<WebView?>()
+                    instrumentation.runOnMainSync { view.set(findWebView(activity.window.decorView)) }
+                    view.get() == null
+                })
+            }
+        }
+    }
+
     @Test
     fun jojAccountGatesAndBackStayInsideTellyo() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("jojAccountGates") == "true")

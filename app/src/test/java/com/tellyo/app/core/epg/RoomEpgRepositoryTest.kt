@@ -7,6 +7,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,13 +17,30 @@ class RoomEpgRepositoryTest {
     private val now = Instant.now()
 
     @Test
+    fun cachedGuideDoesNotConstructNetworkProvidersAndRefreshConstructsThemOffTheCallerThread() = runTest {
+        val dao = MemoryDao()
+        val callerThread = Thread.currentThread()
+        var constructionThread: Thread? = null
+        val provider = Provider(EpgFetchResult(xml(program("show", now, now.plusSeconds(3600)))))
+        val repository = RoomEpgRepository(dao, dagger.Lazy {
+            constructionThread = Thread.currentThread()
+            setOf(provider)
+        }, XmlTvParser())
+        repository.observePrograms("channel", now, now.plusSeconds(3600)).first()
+        assertEquals(null, constructionThread)
+        repository.refresh()
+        assertTrue(constructionThread != null && constructionThread !== callerThread)
+        assertEquals(1, provider.fetches)
+    }
+
+    @Test
     fun liveOnlyCorrectionRetainsFutureScheduleAndRemovesOldCurrentId() = runTest {
         val dao = MemoryDao()
         val future = program("future", now.plusSeconds(3600), now.plusSeconds(7200))
         val old = program("old", now.minusSeconds(600), now.plusSeconds(1200))
         val corrected = program("corrected", now.minusSeconds(480), now.plusSeconds(1200))
         val provider = Provider(EpgFetchResult(xml(old, future)))
-        val repository = RoomEpgRepository(dao, setOf(provider), XmlTvParser())
+        val repository = RoomEpgRepository(dao, dagger.Lazy { setOf(provider) }, XmlTvParser())
         repository.refresh()
         provider.result = EpgFetchResult(xml(corrected), emptyList())
         repository.refresh()
@@ -36,7 +54,7 @@ class RoomEpgRepositoryTest {
         val cancelled = program("cancelled", now.plusSeconds(1800), now.plusSeconds(3600))
         val current = program("current", now.minusSeconds(600), now.plusSeconds(1200))
         val provider = Provider(EpgFetchResult(xml(current, cancelled, future)))
-        val repository = RoomEpgRepository(dao, setOf(provider), XmlTvParser())
+        val repository = RoomEpgRepository(dao, dagger.Lazy { setOf(provider) }, XmlTvParser())
         repository.refresh()
         provider.result = EpgFetchResult(xml(current), listOf(
             EpgReplacementWindow("channel", now.minusSeconds(3600), now.plusSeconds(7200)),
@@ -49,7 +67,7 @@ class RoomEpgRepositoryTest {
     fun frequentRefreshCallsDoNotDownloadOrRewriteThrottledFeed() = runTest {
         val dao = MemoryDao()
         val provider = Provider(EpgFetchResult(xml(program("show", now, now.plusSeconds(3600)))), Duration.ofHours(6))
-        val repository = RoomEpgRepository(dao, setOf(provider), XmlTvParser())
+        val repository = RoomEpgRepository(dao, dagger.Lazy { setOf(provider) }, XmlTvParser())
         repeat(5) { repository.refresh() }
         assertEquals(1, provider.fetches)
         assertEquals(1, dao.inserts)
@@ -61,7 +79,7 @@ class RoomEpgRepositoryTest {
         val lower = Provider(EpgFetchResult(xml(program("built-in", now, now.plusSeconds(3600)))), id = "lower")
         val higher = Provider(EpgFetchResult(xml(program("authorized", now, now.plusSeconds(3600)))),
             Duration.ofHours(6), id = "higher", priority = 100)
-        val repository = RoomEpgRepository(dao, setOf(lower, higher), XmlTvParser())
+        val repository = RoomEpgRepository(dao, dagger.Lazy { setOf(lower, higher) }, XmlTvParser())
         repository.refresh()
         repository.refresh()
         assertEquals(listOf("authorized"), dao.programs.map { it.title })
@@ -78,7 +96,7 @@ class RoomEpgRepositoryTest {
         val higher = Provider(EpgFetchResult(xml(current), listOf(
             EpgReplacementWindow("channel", now, now.plusSeconds(3600)),
         )), id = "higher", priority = 100)
-        val repository = RoomEpgRepository(dao, setOf(lower, higher), XmlTvParser())
+        val repository = RoomEpgRepository(dao, dagger.Lazy { setOf(lower, higher) }, XmlTvParser())
         repository.refresh()
         higher.fail = true
         repository.refresh()
@@ -91,9 +109,9 @@ class RoomEpgRepositoryTest {
         val lower = Provider(EpgFetchResult(xml(program("built-in", now, now.plusSeconds(3600)))), id = "lower")
         val higher = Provider(EpgFetchResult(xml(program("authorized", now, now.plusSeconds(3600)))),
             id = "higher", priority = 100)
-        RoomEpgRepository(dao, setOf(lower, higher), XmlTvParser()).refresh()
+        RoomEpgRepository(dao, dagger.Lazy { setOf(lower, higher) }, XmlTvParser()).refresh()
         higher.fail = true
-        RoomEpgRepository(dao, setOf(lower, higher), XmlTvParser()).refresh()
+        RoomEpgRepository(dao, dagger.Lazy { setOf(lower, higher) }, XmlTvParser()).refresh()
         assertEquals(listOf("authorized"), dao.programs.map { it.title })
     }
 

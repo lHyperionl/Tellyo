@@ -15,6 +15,8 @@ import com.tellyo.app.core.network.NetworkMonitor
 import com.tellyo.app.core.network.NetworkStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -89,6 +91,7 @@ class PlaybackRecoveryTest {
 
     @Test fun switchingAwayFromStableClearsBitrateCapForAutoAndHigh() = main {
         connect()
+        runBlocking { client.play(source) }
         client.setVideoQuality(VideoQualityPreference.STABLE)
         assertEquals(3_000_000, player.trackSelectionParameters.maxVideoBitrate)
         client.setVideoQuality(VideoQualityPreference.AUTO)
@@ -101,6 +104,34 @@ class PlaybackRecoveryTest {
         assertEquals(Int.MAX_VALUE, player.trackSelectionParameters.maxVideoBitrate)
         assertTrue(player.trackSelectionParameters.forceHighestSupportedBitrate)
         assertTrue(player.trackSelectionParameters.preferredVideoMimeTypes.isEmpty())
+    }
+
+    @Test fun browsingAndQualityChangesDoNotStartNativePlaybackConnection() = main {
+        createPlayer()
+        var connections = 0
+        val connection = CoroutineScope(Dispatchers.Main.immediate).async(start = CoroutineStart.LAZY) {
+            connections++
+            player
+        }
+        client = Media3PlaybackClient(connection, object : PlaybackLogger {
+            override fun record(event: PlaybackLogEvent) = Unit
+        }, telemetry, network)
+        client.onHostStarted()
+        client.setVideoQuality(VideoQualityPreference.STABLE)
+        client.onHostStopped()
+        client.onHostStarted()
+        client.stop()
+        assertEquals(0, connections)
+        assertNull(client.player.value)
+        assertEquals(PlaybackState.Idle, client.state.value)
+
+        runBlocking { client.play(source) }
+        assertEquals(1, connections)
+        assertEquals(1, player.playCalls)
+        assertEquals(3_000_000, player.trackSelectionParameters.maxVideoBitrate)
+        runBlocking { client.play(source) }
+        assertEquals(1, connections)
+        assertEquals(2, player.playCalls)
     }
 
     @Test fun pendingRetryCannotPlayOfflineAndFreshRequestRecovers() {

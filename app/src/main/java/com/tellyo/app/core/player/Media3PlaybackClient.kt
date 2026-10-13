@@ -2,6 +2,7 @@ package com.tellyo.app.core.player
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.SystemClock
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -16,6 +17,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -119,21 +121,23 @@ class Media3PlaybackClient internal constructor(
         }
     }
 
-    init {
-        scope.launch {
-            runCatching {
-                controllerConnection.await()
-            }.onSuccess { controller ->
+    // Browsing and official web players do not need an ExoPlayer/MediaSession.
+    // Share a lazy connection so cancelling a playback request cannot cancel it.
+    private val connectedController = scope.async(start = CoroutineStart.LAZY) {
+        try {
+            controllerConnection.await().also { controller ->
                 controller.addListener(listener)
                 _player.value = controller
                 playbackLogger.record(PlaybackLogEvent(name = "controller_ready"))
                 updateState()
-            }.onFailure { error ->
-                playbackLogger.record(
-                    PlaybackLogEvent(name = "controller_error", detail = error.message),
-                )
-                _state.value = PlaybackState.Error(error.message ?: "Unable to connect to playback service")
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            playbackLogger.record(
+                PlaybackLogEvent(name = "controller_error", detail = error.message),
+            )
+            throw error
         }
     }
 
@@ -167,15 +171,11 @@ class Media3PlaybackClient internal constructor(
     /** Applies the user's quality policy immediately and to future media items. */
     fun setVideoQuality(preference: VideoQualityPreference) {
         videoQualityPreference = preference
-        scope.launch {
-            runCatching {
-                applyVideoQuality(controllerConnection.await())
-            }
-        }
+        _player.value?.let(::applyVideoQuality)
     }
 
     private suspend fun prepare(source: com.tellyo.app.core.model.StreamSource) {
-        val controller = controllerConnection.await()
+        val controller = connectedController.await()
         if (!hostActive || !playbackRequested || lastSource !== source || networkMonitor.status.value != NetworkStatus.Available) return
         lastPlaybackError = null
         // The service owns the player, but the controller can retain playback
@@ -278,7 +278,7 @@ class Media3PlaybackClient internal constructor(
         val source = lastSource ?: return
         resumeJob = scope.launch {
             runCatching {
-                val controller = controllerConnection.await()
+                val controller = connectedController.await()
                 if (!hostActive || lastSource !== source) return@runCatching
                 if (controller.currentMediaItem == null || controller.playbackState == Player.STATE_IDLE) {
                     prepare(source)
@@ -360,14 +360,16 @@ class Media3PlaybackClient internal constructor(
         if (!hostActive || lastSource == null) return
         if (bufferingWatchdogJob?.isActive == true) return
         bufferingWatchdogJob = scope.launch {
-            delay(BUFFERING_TIMEOUT_MILLIS)
-            val player = _player.value
-            if (hostActive && player?.playWhenReady == true && player.playbackState == Player.STATE_BUFFERING) {
-                val source = lastSource
-                if (source != null) {
+            val watchdog = BufferingWatchdog(SystemClock.elapsedRealtime())
+            while (true) {
+                delay(1_000L)
+                val player = _player.value ?: return@launch
+                if (!hostActive || !playbackRequested || !player.playWhenReady ||
+                    player.playbackState != Player.STATE_BUFFERING) return@launch
+                if (watchdog.shouldRetry(SystemClock.elapsedRealtime(), player.totalBufferedDuration)) {
+                    val source = lastSource ?: return@launch
                     scheduleRetry(source, "Stream sa nepodarilo načítať")
-                } else {
-                    _state.value = PlaybackState.Error("Stream sa nepodarilo načítať")
+                    return@launch
                 }
             }
         }
@@ -423,7 +425,7 @@ class Media3PlaybackClient internal constructor(
     private companion object {
         // A caller cancelling its await must not cancel the process-wide session connection.
         fun connect(context: Context): Deferred<Player> =
-            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).async {
+            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).async(start = CoroutineStart.LAZY) {
                 MediaController.Builder(
                     context,
                     SessionToken(context, ComponentName(context, TellyoMediaSessionService::class.java)),
@@ -432,7 +434,6 @@ class Media3PlaybackClient internal constructor(
 
         const val MAX_AUTOMATIC_RETRIES = 3
         const val RETRY_DELAY_MILLIS = 1_000L
-        const val BUFFERING_TIMEOUT_MILLIS = 20_000L
         const val STABLE_MAX_VIDEO_BITRATE = 3_000_000
         const val TELEMETRY_SAMPLE_MILLIS = 1_000L
     }

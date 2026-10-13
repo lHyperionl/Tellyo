@@ -44,6 +44,8 @@ class SlovakIptvPlaybackTest {
             val entry = entries.single { it.channel.id == channel.id }
             assertEquals(entry.url, source.uri.toString())
             assertEquals(entry.headers, source.headers)
+            assertEquals(if (channel.id == "iptv-Sport2.cz") 40_000L else 30_000L,
+                source.targetLiveOffsetMs)
         }
     }
 

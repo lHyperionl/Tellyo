@@ -28,4 +28,6 @@ jobs:
 
       - name: Build, test, and lint
         shell: bash
-        run: bash ./gradlew testDebugUnitTest assembleDebug lintDebug --no-daemon
+        run: |
+          python3 -m unittest discover -s scripts -p test_update_release.py
+          bash ./gradlew testDebugUnitTest assembleDebug lintDebug --no-daemon

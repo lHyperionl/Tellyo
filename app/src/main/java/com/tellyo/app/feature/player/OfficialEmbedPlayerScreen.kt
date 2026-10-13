@@ -10,6 +10,7 @@ import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -28,11 +29,14 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.tellyo.app.core.player.EmbedAdRequestFilter
+import java.io.ByteArrayInputStream
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Hosts a broadcaster-published web player without exposing its temporary manifest
- * to Tellyo. The broadcaster remains responsible for playback, advertising,
- * access rules, and any authentication shown by the page.
+ * to Tellyo. The broadcaster remains responsible for playback, access rules,
+ * and authentication. Optional network filtering blocks separate ad requests.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -40,9 +44,12 @@ fun OfficialEmbedPlayerScreen(
     url: String,
     onBack: () -> Unit,
     reloadGeneration: Int = 0,
+    blockAds: Boolean = true,
 ) {
     BackHandler(onBack = onBack)
     var webView by remember { mutableStateOf<WebView?>(null) }
+    // WebView invokes request interception on a background thread.
+    val adBlockingEnabled = remember { AtomicBoolean(blockAds) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(webView, lifecycleOwner) {
@@ -110,6 +117,24 @@ fun OfficialEmbedPlayerScreen(
                     }
                     webChromeClient = WebChromeClient()
                     webViewClient = object : WebViewClient() {
+                        // Installed before loadUrl: pre-roll requests are filtered
+                        // during initialization, not after playback has started.
+                        override fun shouldInterceptRequest(
+                            view: WebView,
+                            request: WebResourceRequest,
+                        ): WebResourceResponse? {
+                            return if (EmbedAdRequestFilter.shouldBlock(
+                                    request.url.toString(), request.isForMainFrame, adBlockingEnabled.get(),
+                                )) {
+                                android.util.Log.d("TellyoEmbedAds", "Blocked ad host: ${request.url.host}")
+                                WebResourceResponse(
+                                    "text/plain", "UTF-8", 204, "No Content",
+                                    mapOf("Cache-Control" to "no-store"),
+                                    ByteArrayInputStream(ByteArray(0)),
+                                )
+                            } else null
+                        }
+
                         override fun onPageCommitVisible(view: WebView, loadedUrl: String) {
                             super.onPageCommitVisible(view, loadedUrl)
                             prepareOfficialPage(view, loadedUrl)
@@ -160,14 +185,15 @@ fun OfficialEmbedPlayerScreen(
                         } else false
                     }
                     requestFocus()
-                    tag = Pair(url, reloadGeneration)
+                    tag = Triple(url, reloadGeneration, blockAds)
                     loadUrl(url)
                 }
             },
             update = { view ->
+                adBlockingEnabled.set(blockAds)
                 // Accepted login/consent navigation belongs to the current page session.
-                if (view.tag != Pair(url, reloadGeneration)) {
-                    view.tag = Pair(url, reloadGeneration)
+                if (view.tag != Triple(url, reloadGeneration, blockAds)) {
+                    view.tag = Triple(url, reloadGeneration, blockAds)
                     view.loadUrl(url)
                 }
             },
@@ -267,7 +293,7 @@ private val CENTER_EMBED_VIDEO = """
 // The official embed deliberately mutes unattended autoplay. Opening a channel
 // in Tellyo is a playback request, so once its first video starts, send the
 // broadcaster's normal Play command. This clears its autoplay mute through its
-// own controls and keeps ads intact. Run once so later user mute choices survive.
+// own controls. Run once so later user mute choices survive.
 private val START_AUDIBLE_EMBED = """
     (function() {
         if (window.__tellyoAudibleStartInstalled) return;
@@ -291,8 +317,8 @@ private val START_AUDIBLE_EMBED = """
 """.trimIndent()
 
 // Keep TA3's complete live page and player initialization, including consent
-// and pre-roll. Only its existing player container is fitted to the TV viewport;
-// source URLs, ads, and playback configuration stay with the broadcaster.
+// and consent. Its existing player container is fitted to the TV viewport;
+// source URLs and playback configuration stay with the broadcaster.
 private val FIT_TA3_PLAYER = """
     (function() {
         if (document.getElementById('tellyo-ta3-fit')) return;

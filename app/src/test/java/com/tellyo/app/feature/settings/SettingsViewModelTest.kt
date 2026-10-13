@@ -41,12 +41,29 @@ class SettingsViewModelTest {
         assertEquals(false, model.uiState.value.reduceMotion)
     }
 
+    @Test fun adFilterCanBeDisabledAndResetToEnabled() {
+        val repository = DelayedSettings()
+        repository.gate.complete(Unit)
+        val model = SettingsViewModel(repository).also { store.put("settings", it) }
+        assertEquals(true, model.uiState.value.blockEmbedAds)
+        model.onAction(SettingsAction.ToggleBlockEmbedAds)
+        assertEquals(false, model.uiState.value.blockEmbedAds)
+        assertEquals(false, repository.settings.value.blockEmbedAds)
+        model.onAction(SettingsAction.Reset)
+        assertEquals(true, model.uiState.value.blockEmbedAds)
+        assertEquals(true, repository.settings.value.blockEmbedAds)
+    }
+
     private class DelayedSettings : SettingsRepository {
         val gate = CompletableDeferred<Unit>()
         override val settings = MutableStateFlow(TellyoSettings())
         val qualityWrites = mutableListOf<VideoQualityPreference>()
         val motionWrites = mutableListOf<Boolean>()
         override suspend fun setLastChannel(id: String) = Unit
+        override suspend fun setBlockEmbedAds(enabled: Boolean) {
+            gate.await()
+            settings.value = settings.value.copy(blockEmbedAds = enabled)
+        }
         override suspend fun setReduceMotion(enabled: Boolean) {
             gate.await()
             motionWrites += enabled

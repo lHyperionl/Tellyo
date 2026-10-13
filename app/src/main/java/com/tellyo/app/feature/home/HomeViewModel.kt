@@ -22,6 +22,7 @@ import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -237,12 +238,22 @@ class HomeViewModel @Inject constructor(
 
     private fun loadChannels() {
         viewModelScope.launch {
+            // Start both disk reads together while still restoring preferences
+            // before exposing the channel selection to the viewer.
+            val savedChannel = async {
+                try {
+                    settingsRepository.settings.first().lastChannelId
+                } catch (error: IOException) {
+                    null
+                }
+            }
             val channels = runCatching {
                 channelRepository.getChannels()
                     .filter { it.enabled }
                     .sortedBy { it.number }
             }.getOrElse { error ->
                 if (error is CancellationException) throw error
+                savedChannel.cancel()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -253,6 +264,7 @@ class HomeViewModel @Inject constructor(
             }
 
             if (channels.isEmpty()) {
+                savedChannel.cancel()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -262,11 +274,7 @@ class HomeViewModel @Inject constructor(
             } else {
                 // Read once before exposing channels so a slow preferences read
                 // cannot replace a channel the viewer has already chosen.
-                val savedChannelId = try {
-                    settingsRepository.settings.first().lastChannelId
-                } catch (error: IOException) {
-                    null
-                }
+                val savedChannelId = savedChannel.await()
                 lastRememberedChannelId = savedChannelId
                 val restoredChannelId = savedChannelId
                     ?.takeIf { id -> channels.any { it.id == id } }

@@ -10,6 +10,22 @@ import org.junit.Test
 
 class ChannelRepositoryTest {
     @Test
+    fun providerConstructionIsDeferredAndRunsOffTheCallerThread() = runTest {
+        val callerThread = Thread.currentThread()
+        var constructionThread: Thread? = null
+        val repository = DefaultChannelRepository(
+            dagger.Lazy {
+                constructionThread = Thread.currentThread()
+                ProviderRegistry(mapOf("preview" to PreviewTvProvider()))
+            },
+            InMemoryChannelCatalogRepository(PreviewTvProvider.previewChannels),
+        )
+        assertEquals(null, constructionThread)
+        assertEquals(PreviewTvProvider.previewChannels, repository.getChannels())
+        assertTrue(constructionThread != null && constructionThread !== callerThread)
+    }
+
+    @Test
     fun explicitlyDisabledIptvProviderDoesNotFallBackToEnabledPlaylist() = runTest {
         val channel = Channel("iptv-review", 100, "Review", "Review", null,
             SlovakIptvProvider.PROVIDER_ID, ChannelCategory.GENERAL, true)
@@ -20,18 +36,18 @@ class ChannelRepositoryTest {
             )
         })
         val registry = ProviderRegistry(mapOf(provider.id to provider))
-        assertTrue(DefaultChannelRepository(registry,
+        assertTrue(DefaultChannelRepository(dagger.Lazy { registry },
             InMemoryChannelCatalogRepository(listOf(channel.copy(enabled = false))))
             .getChannels().isEmpty())
         // An unconfigured dynamic provider must still expose its playlist.
-        assertEquals(listOf(channel), DefaultChannelRepository(registry,
+        assertEquals(listOf(channel), DefaultChannelRepository(dagger.Lazy { registry },
             InMemoryChannelCatalogRepository(emptyList())).getChannels())
     }
 
     @Test
     fun repositoryAggregatesChannelsFromRegisteredProviders() = runTest {
         val repository = DefaultChannelRepository(
-            ProviderRegistry(mapOf("preview" to PreviewTvProvider())),
+            dagger.Lazy { ProviderRegistry(mapOf("preview" to PreviewTvProvider())) },
             InMemoryChannelCatalogRepository(PreviewTvProvider.previewChannels),
         )
 
@@ -43,7 +59,7 @@ class ChannelRepositoryTest {
     @Test
     fun repositoryReturnsUnavailableForAnUnknownProvider() = runTest {
         val repository = DefaultChannelRepository(
-            ProviderRegistry(),
+            dagger.Lazy { ProviderRegistry() },
             InMemoryChannelCatalogRepository(emptyList()),
         )
         val channel = Channel(

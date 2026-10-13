@@ -33,6 +33,10 @@ artifacts/
 # Java and tool logs
 *.log
 
+# Python script caches
+__pycache__/
+*.pyc
+
 # Operating-system files
 .DS_Store
 Thumbs.db

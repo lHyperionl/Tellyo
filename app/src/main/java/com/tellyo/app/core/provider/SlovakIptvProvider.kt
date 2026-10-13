@@ -102,7 +102,14 @@ class SlovakIptvProvider @Inject constructor(
                 Uri.parse(entry.url),
                 entry.type,
                 headers = entry.headers,
-                targetLiveOffsetMs = 30_000L,
+                // Sport2 is a single-rendition ~3.5 Mbps feed. Its 4–6 second
+                // segments can take longer than their duration to arrive. Keep
+                // more of the ~50 second playlist ahead of the playback point.
+                targetLiveOffsetMs = if (channel.id.substringBefore('@') == "iptv-Sport2.cz") {
+                    40_000L
+                } else {
+                    30_000L
+                },
             ),
         )
     }

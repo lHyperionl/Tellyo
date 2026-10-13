@@ -189,7 +189,10 @@ class TellyoMediaSessionService : MediaSessionService() {
         const val BANDWIDTH_FRACTION = 0.7f
         const val MIN_BUFFER_MS = 30_000
         const val MAX_BUFFER_MS = 90_000
-        const val BUFFER_FOR_PLAYBACK_MS = 3_000
-        const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 6_000
+        // Starting halfway through one IPTV segment leaves no reserve when the
+        // next download stalls. Resume with two typical segments after a stall
+        // so recovery does not immediately return to buffering.
+        const val BUFFER_FOR_PLAYBACK_MS = 6_000
+        const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 12_000
     }
 }

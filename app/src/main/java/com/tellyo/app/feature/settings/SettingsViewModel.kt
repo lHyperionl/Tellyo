@@ -19,12 +19,14 @@ import kotlinx.coroutines.sync.withLock
 data class SettingsUiState(
     val reduceMotion: Boolean = false,
     val videoQuality: VideoQualityPreference = VideoQualityPreference.AUTO,
+    val blockEmbedAds: Boolean = true,
     val isLoading: Boolean = true,
 )
 
 sealed interface SettingsAction {
     data object ToggleReduceMotion : SettingsAction
     data object CycleVideoQuality : SettingsAction
+    data object ToggleBlockEmbedAds : SettingsAction
     data object Reset : SettingsAction
 }
 
@@ -43,6 +45,7 @@ class SettingsViewModel @Inject constructor(
                     it.copy(
                         reduceMotion = settings.reduceMotion,
                         videoQuality = settings.videoQuality,
+                        blockEmbedAds = settings.blockEmbedAds,
                         isLoading = false,
                     )
                 }
@@ -59,9 +62,11 @@ class SettingsViewModel @Inject constructor(
                 when (action) {
                     SettingsAction.ToggleReduceMotion -> settingsRepository.setReduceMotion(!current.reduceMotion)
                     SettingsAction.CycleVideoQuality -> settingsRepository.setVideoQuality(nextVideoQuality(current.videoQuality))
+                    SettingsAction.ToggleBlockEmbedAds -> settingsRepository.setBlockEmbedAds(!current.blockEmbedAds)
                     SettingsAction.Reset -> {
                         settingsRepository.setReduceMotion(false)
                         settingsRepository.setVideoQuality(VideoQualityPreference.AUTO)
+                        settingsRepository.setBlockEmbedAds(true)
                     }
                 }
             }

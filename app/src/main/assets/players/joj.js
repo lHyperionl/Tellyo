@@ -46,7 +46,7 @@
     }
     let consentSelection = 'didomi-notice-disagree-button';
     let startupFinished = embedded;
-    let startAttempts = 0;
+    let startupDeadline = null;
     let nextStartAt = 0;
     function activate(element) {
         // Tivio binds its action to the icon inside the titled container.
@@ -76,26 +76,37 @@
             return;
         }
         if (!startupFinished) {
-            if (Array.from(document.querySelectorAll('video')).some(v => !v.paused && v.readyState >= 2)) {
+            const now = Date.now();
+            if (startupDeadline !== null && now >= startupDeadline) {
                 startupFinished = true;
                 return;
             }
-            const play = root() && root().querySelector('[title="Spustiť"]');
+            const player = root();
+            // A successful play request sets paused=false before frames arrive.
+            // Leave buffering and pre-roll alone rather than issuing more clicks.
+            if (player && Array.from(player.querySelectorAll('video')).some(v => !v.paused)) {
+                startupFinished = true;
+                return;
+            }
+            if (window.__tellyoMediaLifecycle && !window.__tellyoMediaLifecycle.active) return;
+            const play = player && player.querySelector('[title="Spustiť"]');
             // The control renders before Tivio finishes its asynchronous source
-            // setup. A bounded retry sends the same normal Play action after
-            // setup; it stops at the first loaded media or viewer interaction.
-            if (play && startAttempts < 6 && Date.now() >= nextStartAt) {
-                startAttempts++;
-                nextStartAt = Date.now() + 5000;
+            // setup. Retry promptly within a 30-second window, but only while
+            // its visible Play control remains available and media is paused.
+            if (visible(play) && now >= nextStartAt) {
+                if (startupDeadline === null) startupDeadline = now + 30000;
+                nextStartAt = now + 1000;
                 activate(play);
             }
         }
     }
-    new MutationObserver(refresh).observe(document.body, {childList:true,subtree:true});
+    new MutationObserver(refresh).observe(document.body, {
+        childList:true,subtree:true,attributes:true,attributeFilter:['title','disabled']
+    });
     const startupTimer = setInterval(function () {
         refresh();
-        if (startupFinished || startAttempts >= 6) clearInterval(startupTimer);
-    }, 1000);
+        if (startupFinished) clearInterval(startupTimer);
+    }, 250);
     document.addEventListener('pointerdown', function (event) {
         if (event.isTrusted && root() && root().contains(event.target)) startupFinished = true;
     }, true);
@@ -149,6 +160,9 @@
             selected.focus({preventScroll:!modal});
         } else if (key === 'Enter') {
             const selected = buttons[Math.max(index, 0)];
+            if (!isConsent && !modal && !popupVisible && root() && root().contains(selected)) {
+                startupFinished = true;
+            }
             selected.focus();
             activate(selected);
             if (selected.tagName === 'INPUT' && !['checkbox','radio','submit','button'].includes(selected.type)) return 'input';

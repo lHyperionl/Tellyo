@@ -3,10 +3,10 @@ package com.tellyo.app.feature.guide
 import androidx.lifecycle.ViewModelStore
 import com.tellyo.app.core.epg.EpgRepository
 import com.tellyo.app.core.model.Program
-import com.tellyo.app.core.provider.DefaultChannelRepository
-import com.tellyo.app.core.provider.InMemoryChannelCatalogRepository
+import com.tellyo.app.core.model.Channel
+import com.tellyo.app.core.model.StreamResolution
+import com.tellyo.app.core.provider.ChannelRepository
 import com.tellyo.app.core.provider.PreviewTvProvider
-import com.tellyo.app.core.provider.ProviderRegistry
 import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
@@ -32,8 +32,7 @@ class GuideViewModelTest {
         val clock = com.tellyo.app.core.time.AppClock()
         val epg = CachedEpg()
         val viewModel = GuideViewModel(
-            DefaultChannelRepository(ProviderRegistry(mapOf("preview" to PreviewTvProvider())),
-                InMemoryChannelCatalogRepository(PreviewTvProvider.previewChannels)), epg, clock,
+            channelRepository(), epg, clock,
         ).also { store.put("clock-guide", it) }
         val later = clock.now.value.plusSeconds(600)
         clock.tick(later)
@@ -78,7 +77,7 @@ class GuideViewModelTest {
     fun emptyChannelListCompletesLoadingWithoutStartingRefresh() {
         val epg = CachedEpg()
         val viewModel = GuideViewModel(
-            DefaultChannelRepository(ProviderRegistry(), InMemoryChannelCatalogRepository(emptyList())),
+            channelRepository(emptyList()),
             epg,
         )
         store.put("guide", viewModel)
@@ -88,12 +87,15 @@ class GuideViewModelTest {
     }
 
     private fun newViewModel(epg: EpgRepository): GuideViewModel = GuideViewModel(
-        DefaultChannelRepository(
-            ProviderRegistry(mapOf("preview" to PreviewTvProvider())),
-            InMemoryChannelCatalogRepository(PreviewTvProvider.previewChannels),
-        ),
+        channelRepository(),
         epg,
     ).also { store.put("guide", it) }
+
+    private fun channelRepository(channels: List<Channel> = PreviewTvProvider.previewChannels) =
+        object : ChannelRepository {
+            override suspend fun getChannels() = channels
+            override suspend fun resolveStream(channel: Channel) = StreamResolution.Unavailable("Test")
+        }
 
     private class CachedEpg : EpgRepository {
         var refreshes = 0
